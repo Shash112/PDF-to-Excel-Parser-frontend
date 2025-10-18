@@ -22,7 +22,7 @@ export default function PdfUploadScreen({ onParsed }) {
       const formData = new FormData();
       formData.append("pdf", file);
 
-      const response = await axios.post("http://localhost:5000/api/parse-pdf", formData, {
+      const response = await axios.post("https://pdf-to-excel-parser.vercel.app/api/parse-pdf", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
