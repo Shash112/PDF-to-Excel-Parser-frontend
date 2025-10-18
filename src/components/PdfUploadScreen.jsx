@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { Upload, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Upload, FileText, FileSpreadsheet, Loader2, X } from "lucide-react";
 
 export default function PdfUploadScreen({ onParsed }) {
   const [file, setFile] = useState(null);
@@ -10,11 +10,17 @@ export default function PdfUploadScreen({ onParsed }) {
   const [error, setError] = useState("");
   const [xlsxError, setXlsxError] = useState("");
 
-  // 🔧 Define backend URLs
+  // 🆕 XLSX customization states
+  const [showOptions, setShowOptions] = useState(false);
+  const [font, setFont] = useState("Helvetica");
+  const [addLogo, setAddLogo] = useState(false);
+  const [addQr, setAddQr] = useState(false);
+
+  // 🔧 Backend URLs
   const NODE_API_URL =
-    import.meta.env.VITE_NODE_API_URL || "https://pdf-to-excel-parser.vercel.app"; // Gemini / Express
+    import.meta.env.VITE_NODE_API_URL || "https://pdf-to-excel-parser.vercel.app";
   const PYTHON_API_URL =
-    import.meta.env.VITE_PYTHON_API_URL || "http://127.0.0.1:8000"; // FastAPI backend
+    import.meta.env.VITE_PYTHON_API_URL || "http://127.0.0.1:8000";
 
   // 📄 PDF Handlers
   const handleFileChange = (e) => {
@@ -32,7 +38,6 @@ export default function PdfUploadScreen({ onParsed }) {
       const formData = new FormData();
       formData.append("pdf", file);
 
-      // ✅ Gemini/Express route
       const response = await axios.post(`${NODE_API_URL}/api/parse-pdf`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -47,31 +52,36 @@ export default function PdfUploadScreen({ onParsed }) {
     }
   };
 
-  // 📊 XLSX Handlers (Python endpoint)
+  // 📊 XLSX Handlers
   const handleXlsxChange = (e) => {
     setXlsxFile(e.target.files[0]);
     setXlsxError("");
   };
 
-  const handleXlsxSubmit = async (e) => {
+  // 🆕 Ask for inputs before XLSX processing
+  const handleXlsxSubmit = (e) => {
     e.preventDefault();
     if (!xlsxFile) return setXlsxError("Please select an XLSX file first.");
+    setShowOptions(true);
+  };
 
+  // 🧩 Confirm and send XLSX to backend
+  const handleConfirmUpload = async () => {
     try {
       setLoadingXlsx(true);
+      setShowOptions(false);
       setXlsxError("");
-      const formData = new FormData();
-      formData.append("file", xlsxFile); // Python expects formData key = "pdf"
 
-      // ✅ Python FastAPI endpoint
-      const response = await axios.post(
-        `${PYTHON_API_URL}/generate-sticker`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-          responseType: "blob", // 👈 important
-        }
-      );
+      const formData = new FormData();
+      formData.append("file", xlsxFile);
+      formData.append("font", font);
+      formData.append("addLogo", addLogo);
+      formData.append("addQr", addQr);
+
+      const response = await axios.post(`${PYTHON_API_URL}/generate-sticker`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        responseType: "blob",
+      });
 
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -80,12 +90,9 @@ export default function PdfUploadScreen({ onParsed }) {
       a.download = "stickers_msg_final.pdf";
       a.click();
       window.URL.revokeObjectURL(url);
-      
-      console.log("🐍 Parsed Data (XLSX via Python):", response.data);
-      
     } catch (err) {
-      console.error("❌ Error parsing XLSX:", err);
-      setXlsxError(err.response?.data?.error || "Failed to parse XLSX via Python");
+      console.error("❌ Error processing XLSX:", err);
+      setXlsxError(err.response?.data?.error || "Failed to process XLSX");
     } finally {
       setLoadingXlsx(false);
     }
@@ -99,9 +106,11 @@ export default function PdfUploadScreen({ onParsed }) {
           <div className="p-5 bg-blue-50 rounded-full mb-4">
             <FileText className="w-10 h-10 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-semibold mb-2 text-gray-800">Upload PDF for Extraction</h2>
+          <h2 className="text-2xl font-semibold mb-2 text-gray-800">
+            Upload PDF for Extraction
+          </h2>
           <p className="text-gray-500 text-sm mb-6">
-            Upload your invoice or packing list PDF. The system will extract structured data automatically (Gemini).
+            Upload your invoice or packing list PDF. The system will extract structured data automatically.
           </p>
 
           <form onSubmit={handleSubmit} className="w-full">
@@ -132,7 +141,7 @@ export default function PdfUploadScreen({ onParsed }) {
         </div>
       </div>
 
-      {/* XLSX Upload Card (Python) */}
+      {/* XLSX Upload Card */}
       <div className="bg-white border border-gray-200 shadow-lg rounded-xl p-10 w-full max-w-lg text-center">
         <div className="flex flex-col items-center justify-center">
           <div className="p-5 bg-green-50 rounded-full mb-4">
@@ -170,6 +179,80 @@ export default function PdfUploadScreen({ onParsed }) {
           </form>
         </div>
       </div>
+
+      {/* 🆕 Font + Logo + QR Modal (only for XLSX flow) */}
+      {showOptions && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-[400px] relative">
+            <button
+              onClick={() => setShowOptions(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-lg font-semibold mb-4">Customize XLSX Processing</h3>
+
+            {/* Font Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Font</label>
+              <select
+                value={font}
+                onChange={(e) => setFont(e.target.value)}
+                className="w-full border border-gray-300 rounded-md p-2"
+              >
+                <option value="Helvetica">Helvetica</option>
+                <option value="Times">Times</option>
+                <option value="Courier">Courier</option>
+              </select>
+            </div>
+
+            {/* Logo Checkbox */}
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="addLogo"
+                checked={addLogo}
+                onChange={(e) => setAddLogo(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="addLogo" className="text-sm text-gray-700">
+                Include Logo
+              </label>
+            </div>
+
+            {/* QR Checkbox */}
+            <div className="flex items-center mb-5">
+              <input
+                type="checkbox"
+                id="addQr"
+                checked={addQr}
+                onChange={(e) => setAddQr(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="addQr" className="text-sm text-gray-700">
+                Include QR Code
+              </label>
+            </div>
+
+            {/* Confirm Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowOptions(false)}
+                className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmUpload}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
