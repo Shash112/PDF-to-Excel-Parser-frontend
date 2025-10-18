@@ -1,39 +1,43 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 
 export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
-  const groupedIds = new Set(
-    (data.groups || []).flatMap((g) => g.items.map((it) => it.id))
-  );
-  const ungroupedItems = useMemo(
-    () => data.items.filter((it) => !groupedIds.has(it.id)),
-    [data.items, data.groups]
-  );
-
+  const [splitQtyModal, setSplitQtyModal] = useState(null);
+  const [splitQty, setSplitQty] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const [activeTab, setActiveTab] = useState(data.groups?.[0]?.id || null);
   const [showModal, setShowModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const inputRef = useRef(null);
 
-  // Auto focus input when modal opens
+  // ✅ Calculate already assigned qty for each item
+  const assignedQtyMap = useMemo(() => {
+    const map = {};
+    (data.groups || []).forEach((g) =>
+      g.items.forEach((it) => {
+        const q = parseFloat(it.qty) || 0;
+        map[it.id] = (map[it.id] || 0) + q;
+      })
+    );
+    return map;
+  }, [data.groups]);
+
+  // ✅ Show only items with remaining qty
+  const ungroupedItems = useMemo(() => {
+    return (data.items || []).filter((it) => {
+      const totalAssigned = assignedQtyMap[it.id] || 0;
+      return totalAssigned < Number(it.qty || 0);
+    });
+  }, [data.items, assignedQtyMap]);
+
+  const allGrouped = ungroupedItems.length === 0;
+  const activeGroup = (data.groups || []).find((g) => g.id === activeTab);
+
+  // ✅ Auto focus for "Add Group" modal
   useEffect(() => {
     if (showModal && inputRef.current) {
       setTimeout(() => inputRef.current.focus(), 100);
     }
   }, [showModal]);
-
-  const handleCreateGroup = () => {
-    if (!newGroupName.trim()) return;
-    const newGroup = {
-      id: Date.now(),
-      name: newGroupName.trim(),
-      items: [],
-    };
-    const groups = [...(data.groups || []), newGroup];
-    onChange({ ...data, groups });
-    setActiveTab(newGroup.id);
-    setNewGroupName("");
-    setShowModal(false);
-  };
 
   const renameGroup = (gid, name) => {
     const groups = (data.groups || []).map((g) =>
@@ -49,15 +53,6 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     else if (groups.length === 0) setActiveTab(null);
   };
 
-  const assignToGroup = (itemId, gid) => {
-    if (!gid) return;
-    const item = data.items.find((i) => i.id === itemId);
-    const groups = (data.groups || []).map((g) =>
-      g.id === Number(gid) ? { ...g, items: [...g.items, item] } : g
-    );
-    onChange({ ...data, groups });
-  };
-
   const removeFromGroup = (gid, itemId) => {
     const groups = (data.groups || []).map((g) =>
       g.id === gid
@@ -67,56 +62,100 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     onChange({ ...data, groups });
   };
 
-  const handleItemField = (gid, itemId, field, value) => {
-    const groups = (data.groups || []).map((g) =>
-      g.id === gid
-        ? {
-            ...g,
-            items: g.items.map((it) =>
-              it.id === itemId
-                ? {
-                    ...it,
-                    [field]: value,
-                    ...(field === "qty" || field === "unitWeight"
-                      ? {
-                          totalWeight: (
-                            parseFloat(field === "qty" ? value : it.qty || 0) *
-                            parseFloat(field === "unitWeight" ? value : it.unitWeight || 0)
-                          ).toFixed(2),
-                        }
-                      : {}),
-                  }
-                : it
-            ),
-          }
-        : g
-    );
+  // ==============================
+  // 🧮 Split & Assign Logic
+  // ==============================
+  const openSplitModal = (item, gid) => {
+    setSplitQtyModal({ item, gid });
+    setSplitQty("");
+    setSelectedItemId(item.id);
+  };
+
+  const confirmSplitAssign = () => {
+    const { item, gid } = splitQtyModal;
+    const assignQty = parseFloat(splitQty) || 0;
+    const totalAssigned = assignedQtyMap[item.id] || 0;
+    const available = parseFloat(item.qty || 0) - totalAssigned;
+
+    if (!assignQty || assignQty <= 0) {
+      alert("Please enter a valid quantity.");
+      return;
+    }
+    if (assignQty > available) {
+      alert(`You can assign only up to ${available} units remaining.`);
+      return;
+    }
+
+    const groups = (data.groups || []).map((g) => {
+      if (g.id !== Number(gid)) return g;
+
+      // ✅ Merge same item if already exists in group
+      const existingIndex = g.items.findIndex((it) => it.id === item.id);
+      if (existingIndex !== -1) {
+        const existingItem = g.items[existingIndex];
+        const newQty = parseFloat(existingItem.qty || 0) + assignQty;
+        g.items[existingIndex] = { ...existingItem, qty: newQty };
+      } else {
+        const splitItem = { ...item, uid: Date.now(), qty: assignQty };
+        g.items.push(splitItem);
+      }
+      return { ...g };
+    });
+
+    onChange({ ...data, groups });
+    if (item) item.selectedGroup = "";
+    setSplitQtyModal(null);
+    setSelectedItemId(null);
+  };
+
+  const cancelSplitModal = () => {
+    if (splitQtyModal?.item) splitQtyModal.item.selectedGroup = "";
+    setSplitQtyModal(null);
+    setSelectedItemId(null);
+  };
+
+  // ==============================
+  // 📦 Dimension Handlers
+  // ==============================
+  const handleDimensionChange = (gid, field, value) => {
+    const groups = (data.groups || []).map((g) => {
+      if (g.id !== gid) return g;
+      const updatedGroup = { ...g, [field]: value };
+
+      const L = parseFloat(updatedGroup.length) || 0;
+      const W = parseFloat(updatedGroup.width) || 0;
+      const H = parseFloat(updatedGroup.height) || 0;
+
+      updatedGroup.cbm = parseFloat(((L * W * H) / 1000000).toFixed(3)); // ✅ in cubic meters
+      return updatedGroup;
+    });
+
     onChange({ ...data, groups });
   };
 
-  const allGrouped = ungroupedItems.length === 0;
-  const activeGroup = (data.groups || []).find((g) => g.id === activeTab);
-
+  // ==============================
+  // 🎨 UI Layout
+  // ==============================
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-12 relative">
-      {/* Top Bar */}
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-12">
+      {/* Header */}
       <div className="w-full max-w-7xl mb-8 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg shadow-md py-3 px-6 z-20">
-        <h1 className="text-2xl font-semibold text-gray-800 tracking-tight flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-gray-800">
           <span className="text-blue-600">📦</span> Step 2 — Grouping
         </h1>
         <div className="flex gap-3">
           <button
             onClick={onPrev}
-            className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-lg shadow transition-all"
+            className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg cursor-pointer"
           >
             ◀ Back
           </button>
           <button
             onClick={allGrouped ? onNext : undefined}
             disabled={!allGrouped}
-            className={`px-5 py-2.5 text-sm font-medium rounded-lg shadow transition-all ${
+            className={`px-5 py-2.5 rounded-lg ${
               allGrouped
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                 : "bg-gray-400 text-gray-200 cursor-not-allowed"
             }`}
           >
@@ -128,12 +167,12 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       {/* Ungrouped Items */}
       <div className="w-full max-w-7xl bg-white border border-gray-200 shadow-md rounded-xl mb-10">
         <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-xl">
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-800">
             🧾 Ungrouped Items ({ungroupedItems.length})
           </h2>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md shadow transition-all"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md cursor-pointer"
           >
             ➕ Add Group
           </button>
@@ -141,24 +180,30 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
 
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
-            <thead className="bg-gray-100 text-gray-700 uppercase text-xs tracking-wide sticky top-0">
+            <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
               <tr>
                 <th className="px-3 py-2 border-b w-12">ID</th>
                 <th className="px-3 py-2 border-b text-left">Description</th>
-                <th className="px-3 py-2 border-b w-64 text-center">Assign to Group</th>
+                <th className="px-3 py-2 border-b w-64 text-center">Assign</th>
               </tr>
             </thead>
             <tbody>
               {ungroupedItems.length > 0 ? (
                 ungroupedItems.map((it) => (
-                  <tr key={it.id} className="even:bg-gray-50 hover:bg-blue-50 transition-colors">
-                    <td className="border-t px-3 py-2 text-center text-gray-700">{it.id}</td>
-                    <td className="border-t px-3 py-2 text-gray-800">{it.description}</td>
+                  <tr key={it.id} className="even:bg-gray-50 hover:bg-blue-50">
+                    <td className="border-t px-3 py-2 text-center">{it.id}</td>
+                    <td className="border-t px-3 py-2">{it.description}</td>
                     <td className="border-t px-3 py-2 text-center">
                       <select
-                        defaultValue=""
-                        onChange={(e) => assignToGroup(it.id, e.target.value)}
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-blue-400 focus:border-blue-500 transition-all"
+                        value={selectedItemId === it.id ? it.selectedGroup || "" : ""}
+                        onChange={(e) => {
+                          const gid = e.target.value;
+                          if (gid) {
+                            it.selectedGroup = gid;
+                            openSplitModal(it, gid);
+                          }
+                        }}
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm cursor-pointer focus:ring-1 focus:ring-blue-400 focus:border-blue-500 transition-all"
                       >
                         <option value="">Select Group</option>
                         {(data.groups || []).map((g) => (
@@ -167,6 +212,10 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                           </option>
                         ))}
                       </select>
+
+                      <div className="text-xs text-gray-500 mt-1">
+                        Assigned: {assignedQtyMap[it.id] || 0} / {it.qty}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -185,7 +234,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Groups Section */}
       {(data.groups || []).length > 0 && (
         <div className="w-full max-w-7xl bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
           <div className="flex items-center border-b bg-gray-100 overflow-x-auto">
@@ -193,7 +242,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
               <div
                 key={g.id}
                 onClick={() => setActiveTab(g.id)}
-                className={`px-6 py-3 text-sm font-medium cursor-pointer transition-all border-b-2 ${
+                className={`px-6 py-3 text-sm cursor-pointer border-b-2 ${
                   g.id === activeTab
                     ? "border-blue-600 text-blue-700 bg-white"
                     : "border-transparent text-gray-600 hover:text-blue-600"
@@ -206,109 +255,128 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
 
           {activeGroup ? (
             <div className="p-4">
+              {/* Group Info */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">Group name:</span>
                   <input
                     value={activeGroup.name}
                     onChange={(e) => renameGroup(activeGroup.id, e.target.value)}
-                    className="font-semibold text-gray-800 bg-white border border-gray-300 rounded-md px-3 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
+                    className="font-semibold border border-gray-300 rounded-md px-3 py-1.5 focus:ring-1 focus:ring-blue-400"
                   />
                 </div>
                 <button
                   onClick={() => deleteGroup(activeGroup.id)}
-                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs shadow transition-all"
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs cursor-pointer"
                 >
                   🗑 Delete Group
                 </button>
               </div>
 
+              {/* 📏 Dimensions & CBM */}
+              <div className="flex flex-wrap items-end gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-gray-600">
+                    Length (cm)
+                  </label>
+                  <input
+                    type="number"
+                    value={activeGroup.length || ""}
+                    onChange={(e) =>
+                      handleDimensionChange(activeGroup.id, "length", e.target.value)
+                    }
+                    className="w-24 border border-gray-300 rounded px-2 py-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">
+                    Width (cm)
+                  </label>
+                  <input
+                    type="number"
+                    value={activeGroup.width || ""}
+                    onChange={(e) =>
+                      handleDimensionChange(activeGroup.id, "width", e.target.value)
+                    }
+                    className="w-24 border border-gray-300 rounded px-2 py-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">
+                    Height (cm)
+                  </label>
+                  <input
+                    type="number"
+                    value={activeGroup.height || ""}
+                    onChange={(e) =>
+                      handleDimensionChange(activeGroup.id, "height", e.target.value)
+                    }
+                    className="w-24 border border-gray-300 rounded px-2 py-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">
+                    CBM (m³)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeGroup.cbm || 0}
+                    readOnly
+                    className="w-28 border border-gray-300 bg-gray-100 rounded px-2 py-1 text-right font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Group Items */}
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
-                  <thead className="bg-gray-50 text-gray-700 uppercase text-xs tracking-wide sticky top-0">
+                  <thead className="bg-gray-50 text-gray-700 uppercase text-xs">
                     <tr className="text-center">
                       <th className="border-b px-2 py-2 w-10">SR</th>
-                      <th className="border-b px-2 py-2 text-left">Description</th>
+                      <th className="border-b px-2 py-2 text-left">
+                        Description
+                      </th>
                       <th className="border-b px-2 py-2 w-16">Qty</th>
                       <th className="border-b px-2 py-2 w-16">UOM</th>
                       <th className="border-b px-2 py-2 w-24">H.S. Code</th>
                       <th className="border-b px-2 py-2 w-24">Origin</th>
                       <th className="border-b px-2 py-2 w-24">Unit WT</th>
-                      <th className="border-b px-2 py-2 w-24">Total WT</th>
                       <th className="border-b px-2 py-2 w-12">Remove</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {activeGroup.items.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="text-center py-4 text-gray-500 italic border-t bg-gray-50">
-                          No items in this group yet.
-                        </td>
-                      </tr>
-                    )}
                     {activeGroup.items.map((it, idx) => (
-                      <tr key={it.id} className="even:bg-gray-50 hover:bg-blue-50 transition-colors">
-                        <td className="border-t px-2 py-2 text-center text-gray-700">{idx + 1}</td>
+                      <tr
+                        key={it.uid || it.id}
+                        className="even:bg-gray-50 hover:bg-blue-50"
+                      >
+                        <td className="border-t px-2 py-2 text-center">
+                          {idx + 1}
+                        </td>
                         <td className="border-t px-2 py-2">
-                          <textarea
-                            rows={2}
-                            value={it.description || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "description", e.target.value)}
-                            className="w-full border border-gray-300 rounded-md p-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-400 resize-none transition-all"
-                          />
+                          {it.description || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          <input
-                            type="number"
-                            value={it.qty || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "qty", e.target.value)}
-                            className="w-full text-center border border-gray-300 rounded-md p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
-                          />
+                          {it.qty ?? ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          <input
-                            type="text"
-                            value={it.unit || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "unit", e.target.value)}
-                            className="w-full text-center border border-gray-300 rounded-md p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
-                          />
+                          {it.unit || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          <input
-                            type="text"
-                            value={it.hsCode || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "hsCode", e.target.value)}
-                            className="w-full text-center border border-gray-300 rounded-md p-1.5 text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
-                          />
+                          {it.hsCode || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          <input
-                            type="text"
-                            value={it.origin || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "origin", e.target.value)}
-                            className="w-full text-center border border-gray-300 rounded-md p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
-                          />
+                          {it.origin || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          <input
-                            type="number"
-                            value={it.unitWeight || ""}
-                            onChange={(e) => handleItemField(activeGroup.id, it.id, "unitWeight", e.target.value)}
-                            className="w-full text-center border border-gray-300 rounded-md p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all"
-                          />
-                        </td>
-                        <td className="border-t px-2 py-2 text-center bg-gray-100">
-                          <input
-                            type="text"
-                            value={it.totalWeight || ""}
-                            readOnly
-                            className="w-full text-center border border-gray-200 rounded-md p-1.5 bg-gray-100 text-gray-700 cursor-not-allowed"
-                          />
+                          {it.unitWeight || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
                           <button
-                            onClick={() => removeFromGroup(activeGroup.id, it.id)}
-                            className="text-red-600 text-xs font-medium hover:text-red-700 transition-colors"
+                            onClick={() =>
+                              removeFromGroup(activeGroup.id, it.id)
+                            }
+                            className="text-red-600 text-xs font-medium hover:text-red-700 cursor-pointer"
                           >
                             ✖
                           </button>
@@ -327,37 +395,172 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
         </div>
       )}
 
-      {/* Modal Popup */}
+      {/* 🔹 Split Qty Modal */}
+      {splitQtyModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-80">
+            <h3 className="text-lg font-semibold mb-3">
+              Split Quantity for Item #{splitQtyModal.item.id}
+            </h3>
+            <p className="text-sm text-gray-600 mb-2">
+              Available:{" "}
+              {Number(splitQtyModal.item.qty) -
+                (assignedQtyMap[splitQtyModal.item.id] || 0)}
+            </p>
+            <input
+              type="number"
+              value={splitQty}
+              onChange={(e) => setSplitQty(e.target.value)}
+              placeholder="Enter qty to assign"
+              className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={cancelSplitModal}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSplitAssign}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm cursor-pointer"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ➕ Add Group Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white w-96 rounded-xl shadow-2xl p-6 animate-fadeIn">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              🆕 Create New Group
-            </h3>
+          <div className="bg-white w-96 rounded-xl shadow-2xl p-6">
+            <h3 className="text-lg font-semibold mb-4">🆕 Create New Group</h3>
+
+            {/* Group Name */}
             <input
               ref={inputRef}
               type="text"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               placeholder="Enter group name"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
+
+            {/* 📏 Dimensions Input */}
+            <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
+              <div>
+                <label>Length (cm)</label>
+                <input
+                  type="number"
+                  id="group-length"
+                  placeholder="L"
+                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const length = parseFloat(e.target.value) || 0;
+                    const width = parseFloat(document.getElementById("group-width")?.value) || 0;
+                    const height = parseFloat(document.getElementById("group-height")?.value) || 0;
+                    const cbm = ((length * width * height) / 1000000).toFixed(3);
+                    document.getElementById("group-cbm").value = cbm;
+                  }}
+                />
+              </div>
+
+              <div>
+                <label>Width (cm)</label>
+                <input
+                  type="number"
+                  id="group-width"
+                  placeholder="W"
+                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const width = parseFloat(e.target.value) || 0;
+                    const length = parseFloat(document.getElementById("group-length")?.value) || 0;
+                    const height = parseFloat(document.getElementById("group-height")?.value) || 0;
+                    const cbm = ((length * width * height) / 1000000).toFixed(3);
+                    document.getElementById("group-cbm").value = cbm;
+                  }}
+                />
+              </div>
+
+              <div>
+                <label>Height (cm)</label>
+                <input
+                  type="number"
+                  id="group-height"
+                  placeholder="H"
+                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const height = parseFloat(e.target.value) || 0;
+                    const length = parseFloat(document.getElementById("group-length")?.value) || 0;
+                    const width = parseFloat(document.getElementById("group-width")?.value) || 0;
+                    const cbm = ((length * width * height) / 1000000).toFixed(3);
+                    document.getElementById("group-cbm").value = cbm;
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* CBM Display */}
+            <div className="mb-4 text-right text-sm text-gray-700">
+              <strong>CBM:</strong>{" "}
+              <input
+                id="group-cbm"
+                type="text"
+                value="0.000"
+                readOnly
+                className="w-24 text-right border border-gray-300 bg-gray-100 rounded px-2 py-1 font-semibold"
+              />{" "}
+              m³
+            </div>
+
             <div className="flex justify-end gap-3 mt-5">
               <button
                 onClick={() => {
                   setShowModal(false);
                   setNewGroupName("");
                 }}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-md transition-all"
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm cursor-pointer"
               >
                 Cancel
               </button>
+
               <button
-                onClick={handleCreateGroup}
-                disabled={!newGroupName.trim()}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                onClick={() => {
+                  const length = parseFloat(document.getElementById("group-length")?.value) || 0;
+                  const width = parseFloat(document.getElementById("group-width")?.value) || 0;
+                  const height = parseFloat(document.getElementById("group-height")?.value) || 0;
+                  const cbm = parseFloat(document.getElementById("group-cbm")?.value) || 0;
+
+                  if (!newGroupName.trim()) {
+                    alert("Please enter a group name.");
+                    return;
+                  }
+                  if (!length || !width || !height) {
+                    alert("Please enter all dimensions before creating a group.");
+                    return;
+                  }
+
+                  const newGroup = {
+                    id: Date.now(),
+                    name: newGroupName.trim(),
+                    items: [],
+                    length,
+                    width,
+                    height,
+                    cbm,
+                  };
+
+                  const groups = [...(data.groups || []), newGroup];
+                  onChange({ ...data, groups });
+                  setActiveTab(newGroup.id);
+                  setNewGroupName("");
+                  setShowModal(false);
+                }}
+                className={`px-4 py-2 text-sm rounded-md ${
                   newGroupName.trim()
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                     : "bg-gray-300 text-gray-400 cursor-not-allowed"
                 }`}
               >
@@ -367,6 +570,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

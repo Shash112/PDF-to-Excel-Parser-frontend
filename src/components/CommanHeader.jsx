@@ -7,21 +7,39 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
       header: { ...prev.header, [k]: v },
     }));
 
+  // ✅ Helper to ensure "-CI" suffix
+  const ensureCISuffix = (value = "") => {
+    if (!value) return "";
+    const cleanValue = value.trim();
+    return cleanValue.toUpperCase().endsWith("-CI")
+      ? cleanValue
+      : `${cleanValue}-CI`;
+  };
+
   return (
     <>
       {/* Company Header */}
-      <div className="text-center border-b pb-3 mb-4">
-        <h1 className="text-xl font-bold uppercase">
-          MSG OILFIELD EQUIPMENT TRADING LLC
-        </h1>
-        <p>Dubai Industrial City (DIC), Phase 1</p>
-        <p>Sai Shuaib 2, Warehouse No: J-04, Dubai, United Arab Emirates</p>
-        <p>
-          <strong>TRN No:</strong> 100518964000003
-        </p>
+      <div className="relative">
+        <img
+          src="/logo.png"
+          width={150}
+          height={150}
+          alt="Company Logo"
+          className="absolute left-12"
+        />
+        <div className="text-center border-b pb-3 mb-4">
+          <h1 className="text-xl font-bold uppercase">
+            MSG OILFIELD EQUIPMENT TRADING LLC
+          </h1>
+          <p>Dubai Industrial City (DIC), Phase 1</p>
+          <p>Sai Shuaib 2, Warehouse No: J-04, Dubai, United Arab Emirates</p>
+          <p>
+            <strong>TRN No:</strong> 100518964000003
+          </p>
+        </div>
       </div>
 
-      {/* Title (dynamic so PL and INV can share same component) */}
+      {/* Title */}
       <h2 className="text-lg font-bold text-center underline mb-4">
         {title || ""}
       </h2>
@@ -50,17 +68,23 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                     className="border border-gray-300 rounded p-1 ml-1 w-44"
                   />
                 </div>
+
+                {/* ✅ INV. NO auto-suffix with -CI */}
                 <div>
                   <strong>INV. NO :</strong>{" "}
                   <input
                     type="text"
-                    value={header.salesOrderNo || ""}
-                    onChange={(e) => setHeader("salesOrderNo", e.target.value)}
-                    className="border border-gray-300 rounded p-1 ml-1 w-44"
+                    value={ensureCISuffix(header.salesOrderNo || "")}
+                    onChange={(e) =>
+                      setHeader("salesOrderNo", ensureCISuffix(e.target.value))
+                    }
+                    className="border border-gray-300 rounded p-1 ml-1 w-44 uppercase"
+                    placeholder="Enter Invoice No"
                   />
                 </div>
+
                 <div>
-                  <strong>S.O. REF :</strong>{" "}
+                  <strong>PO Number :</strong>{" "}
                   <input
                     type="text"
                     value={header.refNo || ""}
@@ -79,26 +103,39 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
         <tbody>
           <tr>
             <td className="border border-gray-400 p-3 align-top w-1/2">
-              <div className="mt-2">
-                <strong>MODE OF SHIPMENT :</strong>{" "}
-                <input
-                  type="text"
+              {/* Mode of Shipment Dropdown */}
+              <div className="mt-2 flex items-center gap-2">
+                <strong>MODE OF SHIPMENT :</strong>
+                <select
                   value={header.modeOfShipment || ""}
                   onChange={(e) => setHeader("modeOfShipment", e.target.value)}
-                  className="border border-gray-300 rounded p-1 ml-1 w-64"
-                />
+                  className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select Mode</option>
+                  <option value="AIR">AIR</option>
+                  <option value="SEA">SEA</option>
+                  <option value="LAND">LAND</option>
+                  <option value="COURIER">COURIER</option>
+                </select>
               </div>
 
-              <div className="mt-2">
-                <strong>FREIGHT TERMS :</strong>{" "}
-                <input
-                  type="text"
+              {/* Freight Terms Dropdown */}
+              <div className="mt-2 flex items-center gap-2">
+                <strong>FREIGHT TERMS :</strong>
+                <select
                   value={header.freightTerms || ""}
                   onChange={(e) => setHeader("freightTerms", e.target.value)}
-                  className="border border-gray-300 rounded p-1 ml-1 w-64"
-                />
+                  className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select Term</option>
+                  <option value="EX-WORKS">EX-WORKS</option>
+                  <option value="DDP">DDP</option>
+                  <option value="FOB">FOB</option>
+                  <option value="CIF">CIF</option>
+                </select>
               </div>
 
+              {/* Loading & Discharge */}
               <div className="mt-2">
                 <strong>PLACE OF LOADING :</strong>{" "}
                 <input
@@ -114,12 +151,15 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                 <input
                   type="text"
                   value={header.placeOfDischarge || ""}
-                  onChange={(e) => setHeader("placeOfDischarge", e.target.value)}
+                  onChange={(e) =>
+                    setHeader("placeOfDischarge", e.target.value)
+                  }
                   className="border border-gray-300 rounded p-1 ml-1 w-64"
                 />
               </div>
             </td>
 
+            {/* Sold To */}
             <td className="border border-gray-400 p-3 align-top w-1/2">
               <strong>SOLD TO / INVOICED TO :</strong>
               <textarea
@@ -131,6 +171,7 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
             </td>
           </tr>
 
+          {/* Origin & HS Codes */}
           <tr>
             <td className="border border-gray-400 p-3">
               <strong>COUNTRY / PLACE OF ORIGIN:</strong>{" "}
@@ -142,7 +183,6 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                 placeholder="UAE"
               />
             </td>
-
             <td className="border border-gray-400 p-3">
               <p>
                 <strong>HS CODES IN THIS SHIPMENT:</strong>{" "}

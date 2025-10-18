@@ -40,13 +40,13 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
         <div className="flex gap-3">
           <button
             onClick={autoHs}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow transition-all"
+            className="px-5 py-2.5 cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow transition-all"
           >
             ⚙️ Auto HS Codes
           </button>
           <button
             onClick={onNext}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow transition-all"
+            className="px-5 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow transition-all"
           >
             💾 Save & Next
           </button>
