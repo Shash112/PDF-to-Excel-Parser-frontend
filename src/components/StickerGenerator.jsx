@@ -2,8 +2,9 @@ import React from "react";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
 import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
 
-export default function StickerGenerator({ items = [] }) {
+export default function StickerGenerator({header = {}, items = [] }) {
 
 const generateStickerPDF = async () => {
   if (!items || items.length === 0) {
@@ -40,9 +41,9 @@ const generateStickerPDF = async () => {
     let y = height - pad - 5;
 
     // HEADER
-    page.drawText("Dubai Petroleum Establishment", { x: pad, y, size: fontSize, font });
+    page.drawText(header.buyer, { x: pad, y, size: fontSize, font });
     y -= lineHeight;
-    page.drawText("PO Number: DPE-004968-152", { x: pad, y, size: fontSize, font });
+    page.drawText(`PO Number: ${header.po_number}, { x: pad, y, size: fontSize, font }`);
     y -= lineHeight;
     page.drawText(`ITEM NO: ${i + 1}`, { x: pad, y, size: fontSize, font });
     y -= lineHeight;
@@ -78,17 +79,17 @@ const generateStickerPDF = async () => {
 
     // ✅ Footer info
     const footerLines = [
-      `PO QTY: ${item.qty || "No Data"}`,
-      "HEAT NUMBER: No Data",
-      "MAKE: No Data",
-      "CERTIFICATE NO: No Data",
-      "Remarks: None",
+      `PO QTY: ${item.qty}`,
+      `HEAT NUMBER:  ${item.heatNumber}`,
+      `MAKE:  ${item.make}`,
+      `CERTIFICATE NO:  ${item.certificateNumber}`,
+      `Remarks:  ${item.remarks}`,
     ];
 
     const footerBlockHeight = footerLines.length * lineHeight + 10;
     // const availableHeight = y - pad - footerBlockHeight;
 
-    const descLines = wrapText(item.description || "No Description", font, fontSize, width - pad * 2 - 20);
+    const descLines = wrapText(item.description || "", font, fontSize, width - pad * 2 - 20);
 
     // ✅ Draw description safely within available height
     for (const line of descLines) {
@@ -122,22 +123,100 @@ const generateStickerPDF = async () => {
   saveAs(new Blob([pdfBytes], { type: "application/pdf" }), "MSG_Stickers.pdf");
 };
 
+const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    /** =============================
+     *  🧾 PACKING LIST SHEET
+     * ============================= */
+    const summary_data = [
+      ["", "", "SUMMARY LIST"],
+      ["", "", `Client: ${header.buyer}`],
+      ["", "", `PO Number: ${header.po_number}`],
+      ["", "", `MSG Ref: ${header.refNo}`],
+      ["", "", "SL NO", "DESCRIPTION", "PO QTY", "UOM", "Heat Code", "Certificate Number", "MAKE", "REMARKS"],
+    ];
+
+
+
+
+      (items || []).forEach((it, idx) => {
+        summary_data.push([
+          header.buyer, 
+          header.po_number,
+          idx + 1,
+          it.description,
+          it.qty,
+          it.unit,
+          it.heatNumber,
+          it.certificateNumber,
+          it.make,
+          it.remarks,
+        ]);
+      });
+
+
+
+    const ws = XLSX.utils.aoa_to_sheet(summary_data);
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 6 },
+      { wch: 6 },
+      { wch: 80 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 18 },
+    ];
+    
+    const bold = { font: { bold: true } };
+    ["A1", "A6", "A8", "A16"].forEach((c) => ws[c] && (ws[c].s = bold));
+
+    ws["!autofilter"] = { ref: "A21:H21" };
+    XLSX.utils.book_append_sheet(wb, ws, "Summary");
+
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(
+      new Blob([wbout], { type: "application/octet-stream" }),
+      `Summary_${header.salesOrderNo || "Export"}.xlsx`
+    );
+  };
+
 
   return (
-    <div className="bg-white border p-4 rounded-lg shadow w-full max-w-md">
-      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-        🏷️ Dubai Petroleum Sticker Generator
-      </h2>
-      <p className="text-sm text-gray-600 mb-3">
-        Generates one PDF with each item on a separate page.
-      </p>
+    <div className="flex flex-row gap-4">
+      <div className="bg-white border p-4 rounded-lg shadow w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          🏷️ Dubai Petroleum Sticker Generator
+        </h2>
+        <p className="text-sm text-gray-600 mb-3">
+          Generates one PDF with each item on a separate page.
+        </p>
 
-      <button
-        onClick={generateStickerPDF}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-      >
-        Generate Sticker PDF
-      </button>
+        <button
+          onClick={generateStickerPDF}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+          Generate Sticker PDF
+        </button>
+      </div>
+      <div className="bg-white border p-4 rounded-lg shadow w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          🏷️ Dubai Petroleum Sticker Excel File Generator
+        </h2>
+        <p className="text-sm text-gray-600 mb-3">
+          Export Excel file for sticker generation.
+        </p>
+
+        <button
+          onClick={exportToExcel}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+          Export to Excel
+        </button>
+      </div>
     </div>
   );
 }

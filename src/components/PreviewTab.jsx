@@ -5,6 +5,7 @@ import PackingListPreview from "./PackingListPreview";
 import InvoicePreview from "./InvoicePreview";
 import { buildExcelHeader } from "../utils/buildExcelHeader";
 import numberToWords from "number-to-words";
+import SummaryPreview from "./SummaryPreview";
 export default function PreviewTabs({ data, onChange, onPrev }) {
   const [activeTab, setActiveTab] = useState("PL"); // PL | INV
   const { header = {}, items = [], groups = [], totals = {} } = data;
@@ -168,7 +169,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       {/* Tabs Header */}
       <div className="flex justify-between mb-6 items-center">
         <div className="flex gap-2">
-          {["PL", "INV"].map((tab) => (
+          {["PL", "INV", "SUMMARY"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -178,7 +179,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              {tab === "PL" ? "🧾 Packing List" : "💰 Invoice"}
+              {tab === "PL" ? "🧾 Packing List" : tab === "INV" ? "💰 Invoice" : "🧾 SUMMARY"}
             </button>
           ))}
         </div>
@@ -198,12 +199,14 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
           </button>
         </div>
       </div>
-
+      
       {/* Tab Content */}
       {activeTab === "PL" ? (
         <PackingListPreview data={data} onChange={onChange} />
-      ) : (
+      ) : activeTab == "INV" ? (
         <InvoicePreview data={data} onChange={onChange} />
+      ) : (
+        <SummaryPreview data={data} onChange={onChange} />
       )}
     </div>
   );
