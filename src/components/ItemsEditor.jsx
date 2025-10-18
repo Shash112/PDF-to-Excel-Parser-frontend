@@ -108,6 +108,7 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
                       <input
                         type="number"
+                        readOnly
                         value={it.qty || ""}
                         onChange={(e) =>
                           handleItemChange(i, "qty", e.target.value)

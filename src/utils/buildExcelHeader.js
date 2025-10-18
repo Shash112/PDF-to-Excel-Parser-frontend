@@ -1,7 +1,7 @@
 export const buildExcelHeader = (header, uniqueHsCodes, title = "") => {
   const rows = [];
-  rows.push(["MSG OILFIELD EQUIPMENT TRADING LLC"]);
-  rows.push(["Dubai Industrial City (DIC), Phase 1"]);
+  rows.push(["eMSG OILFIELD EQUIPMENT TRADING LLC"]);
+  rows.push(["Dubai Industrial City (DIC), Phas 1"]);
   rows.push(["Sai Shuaib 2, Warehouse No: J-04,"]);
   rows.push([" Dubai, United Arab Emirates"]);
   rows.push(["TRN No: 100518964000003"]);

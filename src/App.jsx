@@ -2,10 +2,7 @@ import React, { useState } from "react";
 import PdfUploadScreen from "./components/PdfUploadScreen";
 import ItemsEditor from "./components/ItemsEditor";
 import GroupingScreen from "./components/GroupingScreen";
-import PackingListPreview from "./components/PackingListPreview";
 import PreviewTabs from "./components/PreviewTab";
-import StickerGenerator from "./components/StickerGenerator"; // ✅ new
-import StickerFromExcel from "./components/StickerFromExcel";
 
 
 /** ---------- HS CODE MAPPING (Updated 2025-10) ---------- */
@@ -116,7 +113,6 @@ export default function App() {
     { id: 1, label: "Items", icon: "📦" },
     { id: 2, label: "Grouping", icon: "🧩" },
     { id: 3, label: "Preview", icon: "📋" },
-    { id: 4, label: "Stickers", icon: "🏷️" }, // ✅ New Step
   ];
 
   return (
@@ -156,7 +152,8 @@ export default function App() {
       <main className="flex-1 max-w-[1200px] w-full mx-auto px-6 py-10">
         {/* 0️⃣ Upload */}
         {step === 0 && (
-          <><PdfUploadScreen
+          <>
+          <PdfUploadScreen
             onParsed={(parsedData) => {
               const enrichedItems = (parsedData.items || []).map((it, i) => ({
                 ...it,
@@ -203,15 +200,6 @@ export default function App() {
         {/* 3️⃣ Preview (PL + Invoice) */}
         {step === 3 && data && (
           <PreviewTabs data={data} onChange={setData} onPrev={() => setStep(2)} />
-        )}
-
-        {/* 4️⃣ Stickers (new step) */}
-        {step === 4 && data && (
-          <StickerGenerator
-            items={data.items}
-            header={data.header}
-            onBack={() => setStep(3)}
-          />
         )}
       </main>
     </div>
