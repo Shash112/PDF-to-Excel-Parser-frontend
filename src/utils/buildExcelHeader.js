@@ -1,0 +1,24 @@
+export const buildExcelHeader = (header, uniqueHsCodes, title = "") => {
+  const rows = [];
+  rows.push(["MSG OILFIELD EQUIPMENT TRADING LLC"]);
+  rows.push(["Dubai Industrial City (DIC), Phase 1"]);
+  rows.push(["Sai Shuaib 2, Warehouse No: J-04,"]);
+  rows.push([" Dubai, United Arab Emirates"]);
+  rows.push(["TRN No: 100518964000003"]);
+  rows.push([]);
+  rows.push([title]);
+  rows.push([]);
+  rows.push(["DATE:", header.orderDate || "", "", "INV. NO:", header.salesOrderNo || ""]);
+  rows.push(["S.O. REF:", header.refNo || ""]);
+  rows.push([]);
+  rows.push(["CONSIGNEE:", header.buyer || ""]);
+  rows.push(["SOLD TO / INVOICED TO:", header.buyer || ""]);
+  rows.push(["MODE OF SHIPMENT:", header.modeOfShipment || "", "", "FREIGHT TERMS:", header.freightTerms || ""]);
+  rows.push(["PLACE OF LOADING:", header.placeOfLoading || "", "", "PLACE OF DISCHARGE:", header.placeOfDischarge || ""]);
+  rows.push([]);
+  rows.push(["COUNTRY OF ORIGIN:", header.countryOfOrigin || "UAE"]);
+  rows.push([]);
+  rows.push(["HS CODE:", uniqueHsCodes.join(", ")]);
+  rows.push([]);
+  return rows;
+};
