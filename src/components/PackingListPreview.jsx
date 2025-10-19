@@ -1,10 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect  } from "react";
 import CommonHeader from "./CommanHeader";
 
 export default function PackingListPreview({ data, onChange }) {
   const { header = {}, groups = [], items = [] } = data;
 
-  // Helper: safe total weight
+ // Helper: safe total weight
   const calcTotal = (qty, unitWeight) => {
     const q = parseFloat((qty ?? "").toString().replace(/,/g, ""));
     const u = parseFloat((unitWeight ?? "").toString().replace(/,/g, ""));
@@ -86,18 +86,50 @@ export default function PackingListPreview({ data, onChange }) {
     handleGroupFieldChange(gid, "grossWeight", value);
   };
 
-  // ✅ Auto-packing summary
+  // ✅ Auto-packing summary (case-insensitive, merges name variants like "Box 1", "Box 2", "Container A", etc.)
   const autoPackingSummary = useMemo(() => {
     if (!(groups || []).length) return "";
-    const countMap = {};
+
+    const normalizeName = (name = "") => {
+      // Normalize casing and trim spaces
+      name = name.trim().toLowerCase();
+
+      // ✅ Remove trailing numbers, special chars, and extra spaces (e.g., "box 1", "box_2" → "box")
+      name = name.replace(/[\s_-]*\d+$/g, ""); // removes trailing numbers like 1, 2, 03
+      name = name.replace(/\s+\([^)]*\)$/g, ""); // removes parentheses suffix like "Box (A)"
+      name = name.replace(/\s{2,}/g, " "); // collapse double spaces
+
+      return name;
+    };
+
+    const countMap = new Map();
+
     (groups || []).forEach((g) => {
-      const key = g.name?.trim().toLowerCase() || "unknown";
-      countMap[key] = (countMap[key] || 0) + 1;
+      const rawName = g.name?.trim() || "unknown";
+      const key = normalizeName(rawName);
+
+      // Increment count
+      countMap.set(key, (countMap.get(key) || 0) + 1);
     });
-    return Object.entries(countMap)
+
+    // Build readable summary (capitalize each group name)
+    return Array.from(countMap.entries())
       .map(([name, count]) => `${count} ${capitalizeName(name)}`)
       .join(", ");
   }, [groups]);
+
+
+    useEffect(() => {
+    if (autoPackingSummary) {
+      onChange({
+        ...data,
+        header: {
+          ...header,
+          packingDetails: autoPackingSummary,
+        },
+      });
+    }
+  }, [autoPackingSummary]);
 
   const showGroups = (groups || []).length > 0;
   const setHeader = (k, v) =>
@@ -256,9 +288,15 @@ export default function PackingListPreview({ data, onChange }) {
         />
         <strong className="block mt-4">SHIPPING MARKS:</strong>
         <textarea
+          rows={1}
+          value={header.buyer || header.buyer || ""}
+          onChange={(e) => setHeader("buyer", e.target.value)}
+          className="w-full border border-gray-400 rounded p-1 mt-1"
+        />
+        <textarea
           rows={4}
-          value={header.shippingMarks || header.buyer || ""}
-          onChange={(e) => setHeader("shippingMarks", e.target.value)}
+          value={header.buyerAddress || header.buyerAddress || ""}
+          onChange={(e) => setHeader("buyerAddress", e.target.value)}
           className="w-full border border-gray-400 rounded p-1 mt-1"
         />
       </div>

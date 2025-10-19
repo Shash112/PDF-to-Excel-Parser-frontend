@@ -18,7 +18,32 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
       return updatedItem;
     });
 
-    onChange({ ...data, items });
+    let updatedData = { ...data, items };
+
+    if (field === "origin") {
+          const uniqueOriginMap = new Map();
+
+          items.forEach((it) => {
+            const origin = it.origin?.trim();
+            if (!origin) return; // skip falsy
+            const key = origin.toLowerCase();
+            if (!uniqueOriginMap.has(key)) {
+              uniqueOriginMap.set(key, origin); // preserve first original casing
+            }
+          });
+
+          const uniqueOrigin = Array.from(uniqueOriginMap.values());
+
+        updatedData = {
+          ...updatedData,
+          header: {
+            ...data.header,
+            uniqueOrigin,
+          },
+        };
+      }
+      console.log(updatedData)
+      onChange(updatedData);
   };
 
   const autoHs = () => {

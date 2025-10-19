@@ -15,6 +15,7 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
       ? cleanValue
       : `${cleanValue}-CI`;
   };
+  console.log(header);
 
   return (
     <>
@@ -51,11 +52,18 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
             <td className="border border-gray-400 p-3 align-top w-1/2">
               <strong>CONSIGNEE :</strong>
               <textarea
-                rows={4}
+                rows={1}
                 value={header.buyer || ""}
-                onChange={(e) => setHeader("consignee", e.target.value)}
+                onChange={(e) => setHeader("buyer", e.target.value)}
                 className="w-full mt-1 border border-gray-300 rounded p-1"
               />
+              <textarea
+                rows={4}
+                value={header.buyerAddress || ""}
+                onChange={(e) => setHeader("buyerAddress", e.target.value)}
+                className="w-full mt-1 border border-gray-300 rounded p-1"
+              />
+
             </td>
             <td className="border border-gray-400 p-3 align-top">
               <div className="space-y-2">
@@ -163,9 +171,15 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
             <td className="border border-gray-400 p-3 align-top w-1/2">
               <strong>SOLD TO / INVOICED TO :</strong>
               <textarea
-                rows={4}
+                rows={1}
                 value={header.buyer || ""}
-                onChange={(e) => setHeader("soldTo", e.target.value)}
+                onChange={(e) => setHeader("buyer", e.target.value)}
+                className="w-full mt-1 border border-gray-300 rounded p-1"
+              />
+              <textarea
+                rows={4}
+                value={header.buyerAddress || ""}
+                onChange={(e) => setHeader("buyerAddress", e.target.value)}
                 className="w-full mt-1 border border-gray-300 rounded p-1"
               />
             </td>
@@ -175,13 +189,7 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
           <tr>
             <td className="border border-gray-400 p-3">
               <strong>COUNTRY / PLACE OF ORIGIN:</strong>{" "}
-              <input
-                type="text"
-                value={header.countryOfOrigin || ""}
-                onChange={(e) => setHeader("countryOfOrigin", e.target.value)}
-                className="border border-gray-400 rounded p-1 ml-2 w-64"
-                placeholder="UAE"
-              />
+              <p>{ Array.isArray(header.uniqueOrigin) ? (header.uniqueOrigin).join(", ") : header.uniqueOrigin ? header.uniqueOrigin : "" }</p>
             </td>
             <td className="border border-gray-400 p-3">
               <p>

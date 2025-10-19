@@ -35,6 +35,7 @@ export default function InvoicePreview({ data, onChange }) {
       }
     })()
   },[totals?.total])
+  
   // ✅ Compute Unique HS Codes (same logic as PackingListPreview)
   const uniqueHsCodes = useMemo(() => {
     const hsSet = new Set();
@@ -161,6 +162,7 @@ export default function InvoicePreview({ data, onChange }) {
                 colSpan={5}
               >
                 <strong>PACKING DETAILS:</strong>{" "}
+                
                 {header.packingDetails || ""}
               </td>
 
@@ -171,7 +173,8 @@ export default function InvoicePreview({ data, onChange }) {
                 <strong>SHIPPING MARKS:</strong>
                 <br />
                 <span className="block">
-                  {header.buyer || ""}
+                  {header.buyer || ""}<br />
+                  {header.buyerAddress || ""}
                 </span>
               </td>
             </tr>

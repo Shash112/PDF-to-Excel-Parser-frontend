@@ -155,9 +155,8 @@ export default function App() {
           <>
           <PdfUploadScreen
             onParsed={(parsedData) => {
-              const enrichedItems = (parsedData.items || []).map((it, i) => ({
+              const enrichedItems = (parsedData.items || []).map((it) => ({
                 ...it,
-                id: i + 1,
                 hsCode: assignHsCode(it.description),
                 origin: "UAE",
                 unitWeight: it.unitWeight || "",
