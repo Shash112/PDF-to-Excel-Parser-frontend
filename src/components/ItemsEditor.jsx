@@ -1,51 +1,219 @@
-import React from "react";
+import React, { useState } from "react";
+import { itemsData } from "../data/itemsData"; // adjust path if needed
+
+// ✅ HS Code to Country Mapping
+const hsCodeCountryMap = {
+  "73079100": [
+    "South Korea",
+    "Spain",
+    "Italy",
+    "China",
+    "India",
+    "United Kingdom",
+    "Other",
+  ],
+  "73079900": [
+    "Thailand",
+    "South Korea",
+    "Italy",
+    "China",
+    "India",
+    "United Kingdom",
+    "Austria",
+    "Saudi Arabia",
+    "Taiwan",
+    "Other",
+  ],
+  "73041900": [
+    "Ukraine",
+    "South Korea",
+    "Italy",
+    "China",
+    "Argentina",
+    "Germany",
+    "Spain",
+    "Brazil",
+    "Romania",
+    "South Africa",
+    "India",
+    "Japan",
+    "UAE",
+    "Other",
+  ],
+  "73072100": [
+    "Germany",
+    "Italy",
+    "India",
+    "China",
+    "United Kingdom",
+    "Netherlands",
+    "Other",
+  ],
+  "73072900": [
+    "Thailand",
+    "Austria",
+    "South Korea",
+    "Germany",
+    "China",
+    "India",
+    "Italy",
+  ],
+  "73044100": [
+    "China",
+    "India",
+    "Spain",
+    "Italy",
+    "Taiwan",
+    "Germany",
+    "Japan",
+    "Netherlands",
+    "Other",
+  ],
+};
+
+
+// ✅ Build fast lookup maps for weight by itemCode & description
+const itemWeightMap = (() => {
+  const map = new Map();
+  for (const item of itemsData) {
+    if (item.itemCode)
+      map.set(item.itemCode.trim().toLowerCase(), item.unitWeight);
+    if (item.description)
+      map.set(item.description.trim().toLowerCase(), item.unitWeight);
+  }
+  return map;
+})();
+
+// ✅ Helper function to get weight
+const getUnitWeight = (itemCode, description) => {
+  if (itemCode) {
+    const key = itemCode.trim().toLowerCase();
+    if (itemWeightMap.has(key)) return itemWeightMap.get(key);
+  }
+  if (description) {
+    const key = description.trim().toLowerCase();
+    if (itemWeightMap.has(key)) return itemWeightMap.get(key);
+  }
+  return "";
+};
 
 export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
+
+  console.log("Items editor: ", data)
+  const [splitModal, setSplitModal] = useState(null);
+  const [splitParts, setSplitParts] = useState([]);
+
+  const openSplitModal = (item, index) => {
+    const remainingQty = parseFloat(item.qty) || 0;
+    if (!remainingQty || remainingQty <= 1) {
+      alert("Quantity must be greater than 1 to split.");
+      return;
+    }
+
+    setSplitModal({ item, index });
+    setSplitParts([{ qty: "", origin: "" }]);
+  };
+
+  const handleSplitPartChange = (idx, field, value) => {
+  const newParts = [...splitParts];
+  newParts[idx][field] = value;
+  setSplitParts(newParts);
+};
+
+const addSplitRow = () => {
+  setSplitParts((prev) => [...prev, { qty: "", origin: "" }]);
+};
+
+const removeSplitRow = (idx) => {
+  setSplitParts((prev) => prev.filter((_, i) => i !== idx));
+};
+
+const saveSplit = () => {
+  const totalSplit = splitParts.reduce(
+    (sum, p) => sum + (parseFloat(p.qty) || 0),
+    0
+  );
+  const itemQty = parseFloat(splitModal.item.qty) || 0;
+
+  if (totalSplit !== itemQty) {
+    alert(`Total split quantity (${totalSplit}) must equal item quantity (${itemQty}).`);
+    return;
+  }
+
+  const baseItem = splitModal.item;
+  const newItems = splitParts.map((p, idx) => ({
+    ...baseItem,
+    id: `${baseItem.id}-${idx + 1}`,
+    qty: parseFloat(p.qty),
+    origin: p.origin,
+    totalWeight:
+      parseFloat(p.qty) * parseFloat(baseItem.unitWeight || 0) || 0,
+  }));
+
+  const updatedItems = data.items.flatMap((it, i) =>
+    i === splitModal.index ? newItems : it
+  );
+
+  onChange({ ...data, items: updatedItems });
+  setSplitModal(null);
+  setSplitParts([]);
+};
+
+
   
-  const handleItemChange = (idx, field, value) => {
-    const items = data.items.map((it, i) => {
-      if (i !== idx) return it;
+const handleItemChange = (idx, field, value) => {
+  const items = data.items.map((it, i) => {
+    if (i !== idx) return it;
 
-      const updatedItem = { ...it, [field]: value };
+    const updatedItem = { ...it, [field]: value };
 
-      // ✅ Auto-calculate Total Weight when qty or unitWeight changes
-      if (field === "qty" || field === "unitWeight") {
-        const qty = parseFloat(updatedItem.qty || 0);
-        const unitWeight = parseFloat(updatedItem.unitWeight || 0);
-        updatedItem.totalWeight =
-          qty && unitWeight ? (qty * unitWeight).toFixed(2) : "";
+    // 🧩 Auto-fill unit weight if description or itemCode is changed
+    if (field === "description" || field === "itemCode") {
+      const foundWeight = getUnitWeight(updatedItem.itemCode, updatedItem.description);
+      console.log("Found Weight: ", foundWeight);
+      if (foundWeight) {
+        updatedItem.unitWeight = foundWeight;
       }
+    }
 
-      return updatedItem;
+    // ✅ Auto-calculate Total Weight when qty or unitWeight changes
+    if (["qty", "unitWeight", "description", "itemCode"].includes(field)) {
+      const qty = parseFloat(updatedItem.qty || 0);
+      const unitWeight = parseFloat(updatedItem.unitWeight || 0);
+      updatedItem.totalWeight =
+        qty && unitWeight ? (qty * unitWeight).toFixed(2) : "";
+    }
+
+    return updatedItem;
+  });
+
+  let updatedData = { ...data, items };
+
+  // ✅ Maintain unique origins in header
+  if (field === "origin") {
+    const uniqueOriginMap = new Map();
+
+    items.forEach((it) => {
+      const origin = it.origin?.trim();
+      if (!origin) return;
+      const key = origin.toLowerCase();
+      if (!uniqueOriginMap.has(key)) uniqueOriginMap.set(key, origin);
     });
 
-    let updatedData = { ...data, items };
+    const uniqueOrigin = Array.from(uniqueOriginMap.values());
 
-    if (field === "origin") {
-          const uniqueOriginMap = new Map();
+    updatedData = {
+      ...updatedData,
+      header: {
+        ...data.header,
+        uniqueOrigin,
+      },
+    };
+  }
 
-          items.forEach((it) => {
-            const origin = it.origin?.trim();
-            if (!origin) return; // skip falsy
-            const key = origin.toLowerCase();
-            if (!uniqueOriginMap.has(key)) {
-              uniqueOriginMap.set(key, origin); // preserve first original casing
-            }
-          });
+  onChange(updatedData);
+};
 
-          const uniqueOrigin = Array.from(uniqueOriginMap.values());
-
-        updatedData = {
-          ...updatedData,
-          header: {
-            ...data.header,
-            uniqueOrigin,
-          },
-        };
-      }
-      console.log(updatedData)
-      onChange(updatedData);
-  };
 
   const ensureCISuffix = (value = "") => {
       if (!value) return "";
@@ -200,7 +368,8 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     <option value="COURIER">COURIER</option>
                   </select>
                 </div>
-
+              </td>
+              <td className="border border-gray-400 p-3 align-top w-1/2">
                 {/* Freight Terms Dropdown */}
                 <div className="mt-2 flex items-center gap-2">
                   <strong>FREIGHT TERMS :</strong>
@@ -216,8 +385,11 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     <option value="CIF">CIF</option>
                   </select>
                 </div>
-
-                {/* Loading & Discharge */}
+              </td>
+            </tr>
+            <tr>
+              <td className="border border-gray-400 p-3 align-top w-1/2">
+                                {/* Loading & Discharge */}
                 <div className="mt-2">
                   <strong>PLACE OF LOADING :</strong>{" "}
                   <input
@@ -227,7 +399,8 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     className="border border-gray-300 rounded p-1 ml-1 w-64"
                   />
                 </div>
-
+              </td>
+              <td className="border border-gray-400 p-3 align-top w-1/2">
                 <div className="mt-1">
                   <strong>PLACE OF DISCHARGE :</strong>{" "}
                   <input
@@ -251,12 +424,13 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
           <table className="w-full border-collapse text-sm">
             <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 shadow-sm">
               <tr className="text-center uppercase text-xs tracking-wide">
-                <th className="px-4 py-3 border-b border-gray-300 w-12">ID</th>
+                <th className="px-4 py-3 border-b border-gray-300 w-20">ID</th>
+                <th className="px-4 py-3 border-b border-gray-300 w-40">Item Code</th>
                 <th className="px-4 py-3 border-b border-gray-300 text-left">
                   Description
                 </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-20">Qty</th>
-                <th className="px-4 py-3 border-b border-gray-300 w-20">UOM</th>
+                <th className="px-4 py-3 border-b border-gray-300 w-28">Qty</th>
+                <th className="px-4 py-3 border-b border-gray-300 w-24">UOM</th>
                 <th className="px-4 py-3 border-b border-gray-300 w-28">
                   HS Code
                 </th>
@@ -266,9 +440,9 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                 <th className="px-4 py-3 border-b border-gray-300 w-28">
                   Unit Weight (kg)
                 </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-28">
+                {/* <th className="px-4 py-3 border-b border-gray-300 w-28">
                   Total Weight (kg)
-                </th>
+                </th> */}
               </tr>
             </thead>
 
@@ -284,7 +458,15 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     <td className="border-t border-gray-200 px-4 py-2 text-center text-gray-600 font-medium">
                       {it.id}
                     </td>
-
+                    <td className="border-t border-gray-200 px-4 py-2 text-center">
+                    <input
+                      type="text"
+                      value={it.itemCode || ""}
+                      onChange={(e) => handleItemChange(i, "itemCode", e.target.value)}
+                      placeholder="Enter Item Code"
+                      className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                    />
+                  </td>
                     <td className="border-t border-gray-200 px-4 py-2">
                       <textarea
                         rows={2}
@@ -298,16 +480,23 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     </td>
 
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <input
-                        type="number"
-                        readOnly
-                        value={it.qty || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "qty", e.target.value)
-                        }
-                        placeholder="0"
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
-                      />
+                      <div className="flex items-center justify-center gap-2">
+                        <input
+                          type="number"
+                          readOnly
+                          value={it.qty || ""}
+                          className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                        />
+                        {parseFloat(it.qty) > 1 && (
+                          <button
+                            onClick={() => openSplitModal(it, i)}
+                            className="text-xs text-blue-600 underline hover:text-blue-800"
+                          >
+                            Split
+                          </button>
+                        )}
+                      </div>
+
                     </td>
 
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
@@ -335,18 +524,39 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                     </td>
 
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
+                    {hsCodeCountryMap[it.hsCode] ? (
+                      <select
+                        value={it.origin || ""}
+                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                      >
+                        <option value="">Select Country</option>
+                        {hsCodeCountryMap[it.hsCode].map((country) => (
+                          <option key={country} value={country}>
+                            {country}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
                       <input
                         type="text"
                         value={it.origin || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "origin", e.target.value)
-                        }
+                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
                         placeholder="Country"
                         className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
                       />
-                    </td>
-
+                    )}
+                    {it.origin === "Other" && (
+                      <input
+                        type="text"
+                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                        placeholder="Enter custom country"
+                        className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                      />
+                    )}
+                  </td>
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
+                      {/* <p>{it.unitWeight || ""}</p> */}
                       <input
                         type="number"
                         value={it.unitWeight || ""}
@@ -358,7 +568,7 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                       />
                     </td>
 
-                    <td className="border-t border-gray-200 px-4 py-2 text-center bg-gray-100">
+                    {/* <td className="border-t border-gray-200 px-4 py-2 text-center bg-gray-100">
                       <input
                         type="text"
                         value={it.totalWeight || ""}
@@ -366,7 +576,7 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
                         placeholder="Auto"
                         className="w-full text-center p-1.5 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
                       />
-                    </td>
+                    </td> */}
                   </tr>
                 ))
               ) : (
@@ -385,6 +595,126 @@ export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
 
         
       </div>
+      {splitModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-[550px] max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Split Quantity — {splitModal.item.description}
+            </h3>
+
+            <table className="w-full border-collapse text-sm mb-3">
+              <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
+                <tr>
+                  <th className="border px-2 py-2 w-24 text-center">Qty</th>
+                  <th className="border px-2 py-2 text-center">Origin</th>
+                  <th className="border px-2 py-2 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {splitParts.map((part, idx) => (
+                  <tr key={idx}>
+                    {/* Qty Input */}
+                    <td className="border px-2 py-2 text-center">
+                      <input
+                        type="number"
+                        value={part.qty}
+                        onChange={(e) =>
+                          handleSplitPartChange(idx, "qty", e.target.value)
+                        }
+                        placeholder="0"
+                        className="w-full border border-gray-300 rounded p-1 text-center focus:ring-1 focus:ring-blue-400"
+                      />
+                    </td>
+
+                    {/* Origin Dropdown / Input (based on HS Code) */}
+                    <td className="border px-2 py-2 text-center">
+                      {hsCodeCountryMap[splitModal.item.hsCode] ? (
+                        <>
+                          <select
+                            value={part.origin || ""}
+                            onChange={(e) =>
+                              handleSplitPartChange(idx, "origin", e.target.value)
+                            }
+                            className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                          >
+                            <option value="">Select Country</option>
+                            {hsCodeCountryMap[splitModal.item.hsCode].map((country) => (
+                              <option key={country} value={country}>
+                                {country}
+                              </option>
+                            ))}
+                          </select>
+
+                          {part.origin === "Other" && (
+                            <input
+                              type="text"
+                              value={part.customOrigin || ""}
+                              onChange={(e) =>
+                                handleSplitPartChange(idx, "origin", e.target.value)
+                              }
+                              placeholder="Enter custom country"
+                              className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <input
+                          type="text"
+                          value={part.origin || ""}
+                          onChange={(e) =>
+                            handleSplitPartChange(idx, "origin", e.target.value)
+                          }
+                          placeholder="Country"
+                          className="w-full border border-gray-300 rounded p-1 text-center focus:ring-1 focus:ring-blue-400"
+                        />
+                      )}
+                    </td>
+
+                    {/* Remove Row */}
+                    <td className="border px-2 py-2 text-center">
+                      {splitParts.length > 1 && (
+                        <button
+                          onClick={() => removeSplitRow(idx)}
+                          className="text-red-500 text-xs hover:text-red-700"
+                        >
+                          ✖
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Buttons */}
+            <div className="flex justify-between mt-2">
+              <button
+                onClick={addSplitRow}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+              >
+                ➕ Add Row
+              </button>
+
+              <div className="space-x-3">
+                <button
+                  onClick={() => setSplitModal(null)}
+                  className="px-3 py-1 bg-gray-300 rounded text-sm hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSplit}
+                  className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                >
+                  Save Split
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }

@@ -1,4 +1,84 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const generatePDF = (data) => {
+  const doc = new jsPDF("p", "mm", "a4");
+
+  const addPageHeader = (groupName) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Packing List Summary", 14, 15);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Sales Order No: ${data.header?.salesOrderNo || "N/A"}`, 14, 22);
+    doc.text(`PO Number: ${data.header?.refNo || "N/A"}`, 14, 27);
+
+    // Divider
+    doc.setDrawColor(180);
+    doc.line(10, 30, 200, 30);
+
+    // Group Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(`${groupName}`, 14, 38);
+
+    doc.setFont("helvetica", "normal");
+  };
+
+  // ======================
+  // 📦 Loop through Groups
+  // ======================
+  (data.groups || []).forEach((group, idx) => {
+    // New page for each group (except first)
+    if (idx > 0) doc.addPage();
+
+    // Add header for this group
+    addPageHeader(group.name);
+
+    const tableData = (group.items || []).map((it, i) => [
+      i + 1,
+      it.description,
+      it.qty,
+      it.unit,
+    ]);
+
+    autoTable(doc, {
+      head: [["#", "Description", "Qty", "UOM"]],
+      body: tableData,
+      startY: 45,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { cellWidth: 110 },
+        2: { halign: "center", cellWidth: 20 },
+        3: { halign: "center", cellWidth: 20 },
+      },
+      didDrawPage: () => {
+        // optional watermark or footer can go here
+      },
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 10;
+
+    // ✅ Summary for the group
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Net Weight: ${group.netWeight || 0} KGS    Gross Weight: ${group.grossWeight || 0} KGS`,
+      14,
+      finalY
+    );
+  });
+
+  // ✅ Save the PDF
+  doc.save("Packing_List.pdf");
+};
+
+
 
 export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   const [splitQtyModal, setSplitQtyModal] = useState(null);
@@ -8,9 +88,42 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   const [showModal, setShowModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const inputRef = useRef(null);
-
+  // 🧮 Track selected items for grouping and package numbering
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [packageNumbers, setPackageNumbers] = useState({
+    Box: 1,
+    Pallet: 1,
+    "Carton Box": 1,
+    "Loose Pipe": 1,
+  });
   const { header = {}, items = [], groups = [], totals = {} } = data;
 
+
+  // ✅ Build original qty map for each item
+  const originalQtyMap = useMemo(() => {
+    const map = {};
+    (items || []).forEach((it) => (map[it.id] = parseFloat(it.qty) || 0));
+    return map;
+  }, [items]);
+
+  // ✅ Compute remaining quantity for an item across groups (exclude one group if needed)
+  const getRemainingForItem = (itemId, excludeGroupId = null) => {
+    const original = originalQtyMap[itemId] || 0;
+    let assigned = 0;
+    (groups || []).forEach((g) => {
+      if (excludeGroupId && g.id === excludeGroupId) return;
+      (g.items || []).forEach((it) => {
+        if (it.id === itemId) assigned += parseFloat(it.qty) || 0;
+      });
+    });
+    const remaining = original - assigned;
+    return remaining > 0 ? +remaining.toFixed(6) : 0;
+  };
+
+
+
+
+  
   console.log(header);
   console.log(totals);
   // ✅ Calculate already assigned qty for each item
@@ -45,88 +158,108 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   const allGrouped = ungroupedItems.length === 0;
   const activeGroup = (data.groups || []).find((g) => g.id === activeTab);
 
-  // =======================
-  // ✅ Net & Gross Weights
-  // =======================
-  // Compute per-group net and suggested gross (if user hasn't entered a valid one)
-  const { groupWeights, totalNet, totalGross } = useMemo(() => {
-    let groupWeights = [];
-    let totalNet = 0;
+    // =======================
+    // ✅ Net & Gross Weights
+    // =======================
+    const { groupWeights, totalNet, totalGross } = useMemo(() => {
+      let groupWeights = [];
+      let totalNet = 0;
 
-    if ((groups || []).length > 0) {
-      groupWeights = groups.map((g) => {
-        let net = 0;
-        (g.items || []).forEach((it) => {
-          const tw = calcTotal(it.qty, it.unitWeight);
-          if (tw) net += tw;
+      if ((groups || []).length > 0) {
+        groupWeights = groups.map((g) => {
+          let net = 0;
+          (g.items || []).forEach((it) => {
+            const tw = calcTotal(it.qty, it.unitWeight);
+            if (tw) net += tw;
+          });
+
+          const netRounded = +net.toFixed(2);
+          const boxWeight = parseFloat(g.boxWeight) || 0;
+          const expectedGross = +(netRounded + boxWeight).toFixed(2);
+
+          totalNet += netRounded;
+
+          return {
+            id: g.id,
+            name: g.name,
+            net: netRounded,
+            gross: expectedGross,
+            boxWeight,
+          };
         });
+      } else {
+        (items || []).forEach((it) => {
+          const tw = calcTotal(it.qty, it.unitWeight);
+          if (tw) totalNet += tw;
+        });
+      }
 
-        const netRounded = +net.toFixed(2);
-        // if g.grossWeight exists and >= net, use it; otherwise default to net * 1.04
-        const userGross = parseFloat(g.grossWeight);
-        const autoGross = +(netRounded * 1.04).toFixed(2);
-        const gross =
-          Number.isFinite(userGross) && userGross >= netRounded ? +userGross.toFixed(2) : autoGross;
+      const totalGross =
+        groupWeights.length > 0
+          ? groupWeights.reduce((acc, g) => acc + (g.gross || 0), 0)
+          : +(totalNet).toFixed(2);
 
-        totalNet += netRounded;
-        return { id: g.id, name: g.name, net: netRounded, gross };
+      return {
+        groupWeights,
+        totalNet: +totalNet.toFixed(2),
+        totalGross: +totalGross.toFixed(2),
+      };
+    }, [items, groups]);
+
+
+
+    // ✅ Persist updated net & gross weights whenever boxWeight or items change
+    useEffect(() => {
+      if (!Array.isArray(groupWeights) || !groupWeights.length) return;
+
+      const updatedGroups = (groups || []).map((g) => {
+        const gw = groupWeights.find((x) => x.id === g.id);
+        if (!gw) return g;
+
+        // Gross = Net + BoxWeight (always)
+        const finalGross = +(gw.net + gw.boxWeight).toFixed(2);
+
+        if (g.netWeight === gw.net && g.grossWeight === finalGross) return g;
+
+        return {
+          ...g,
+          netWeight: gw.net,
+          grossWeight: finalGross,
+        };
       });
-    } else {
-      (items || []).forEach((it) => {
-        const tw = calcTotal(it.qty, it.unitWeight);
-        if (tw) totalNet += tw;
-      });
-    }
 
-    const totalGross =
-      groupWeights.length > 0
-        ? groupWeights.reduce((acc, g) => acc + (g.gross || 0), 0)
-        : +(totalNet * 1.04).toFixed(2);
+      const changed = updatedGroups.some(
+        (g, i) =>
+          g.netWeight !== groups[i]?.netWeight ||
+          g.grossWeight !== groups[i]?.grossWeight
+      );
 
-    return { groupWeights, totalNet: +totalNet.toFixed(2), totalGross: +totalGross.toFixed(2) };
-  }, [items, groups]);
+      if (changed) onChange({ ...data, groups: updatedGroups });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [groupWeights]);
 
-  // Persist netWeight and grossWeight into group objects so they’re available on the next screen
-  useEffect(() => {
-    if (!Array.isArray(groupWeights) || !groupWeights.length) return;
-    const updated = (groups || []).map((g) => {
-      const gw = groupWeights.find((x) => x.id === g.id);
-      if (!gw) return g;
-      // Keep user's gross if (still) >= net; else use computed gross
-      const currentGross = parseFloat(g.grossWeight);
-      const finalGross =
-        Number.isFinite(currentGross) && currentGross >= gw.net ? +currentGross.toFixed(2) : gw.gross;
-
-      // Only update if something changed to avoid extra renders
-      if (g.netWeight === gw.net && g.grossWeight === finalGross) return g;
-      return { ...g, netWeight: gw.net, grossWeight: finalGross };
-    });
-
-    const changed =
-      updated.length !== groups.length ||
-      updated.some((g, i) => g.netWeight !== groups[i].netWeight || g.grossWeight !== groups[i].grossWeight);
-
-    if (changed) onChange({ ...data, groups: updated });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupWeights]);
 
   // ✅ Update editable gross weight (cannot be less than net)
-  const handleGrossWeightChange = (gid, value) => {
-    const newGroups = (data.groups || []).map((g) => {
-      if (g.id !== gid) return g;
+    const handleGrossWeightChange = (gid, value) => {
+      const newGroups = (data.groups || []).map((g) => {
+        if (g.id !== gid) return g;
 
-      const netWeight = parseFloat(g.netWeight || 0);
-      const newGross = parseFloat(value);
+        const netWeight = parseFloat(g.netWeight || 0);
+        const boxWeight = parseFloat(g.boxWeight || 0);
+        const minGross = netWeight + boxWeight;
+        const newGross = parseFloat(value);
 
-      if (!Number.isFinite(newGross) || newGross < netWeight) {
-        alert(`Gross weight cannot be less than Net Weight (${netWeight} KGS).`);
-        return g;
-      }
-      return { ...g, grossWeight: +newGross.toFixed(2) };
-    });
+        if (!Number.isFinite(newGross) || newGross < minGross) {
+          alert(`Gross weight cannot be less than Net (${netWeight}) + Box (${boxWeight}) = ${minGross.toFixed(2)} KGS.`);
+          return g;
+        }
 
-    onChange({ ...data, groups: newGroups });
-  };
+        return { ...g, grossWeight: +newGross.toFixed(2) };
+      });
+
+      onChange({ ...data, groups: newGroups });
+    };
+
 
   // const handleGroupFieldChange = (gid, field, value) => {
   //   const newGroups = (data.groups || []).map((g) => {
@@ -175,6 +308,41 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     );
     onChange({ ...data, groups });
   };
+
+  const addItemToExistingGroup = (itemId, groupId) => {
+    const item = (items || []).find((it) => it.id === itemId);
+    if (!item) return;
+
+    const remaining = getRemainingForItem(itemId);
+    if (remaining <= 0) {
+      alert("This item is already fully assigned.");
+      return;
+    }
+
+    const updatedGroups = (data.groups || []).map((g) => {
+      if (g.id !== Number(groupId)) return g;
+
+      // check if item already exists in group
+      const existingItem = g.items.find((it) => it.id === itemId);
+      if (existingItem) {
+        const newQty = parseFloat(existingItem.qty || 0) + remaining;
+        return {
+          ...g,
+          items: g.items.map((it) =>
+            it.id === itemId ? { ...it, qty: newQty } : it
+          ),
+        };
+      } else {
+        return {
+          ...g,
+          items: [...g.items, { ...item, qty: remaining }],
+        };
+      }
+    });
+
+    onChange({ ...data, groups: updatedGroups });
+  };
+
 
   // ==============================
   // 🧮 Split & Assign Logic
@@ -250,6 +418,16 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   // ==============================
   // 🎨 UI Layout
   // ==============================
+  const updateCBMInput = () => {
+    const L = parseFloat(document.getElementById("group-length")?.value) || 0;
+    const W = parseFloat(document.getElementById("group-width")?.value) || 0;
+    const H = parseFloat(document.getElementById("group-height")?.value) || 0;
+    const cbm = L && W && H ? ((L * W * H) / 1_000_000).toFixed(3) : "0.000";
+    const cbmInput = document.getElementById("group-cbm");
+    if (cbmInput) cbmInput.value = cbm;
+  };
+
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-12">
       {/* Header */}
@@ -284,12 +462,18 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
           <h2 className="text-lg font-semibold text-gray-800">
             🧾 Ungrouped Items ({ungroupedItems.length})
           </h2>
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md cursor-pointer"
-          >
-            ➕ Add Group
-          </button>
+        <button
+          onClick={() => selectedItems.length && setShowModal(true)}
+          disabled={!selectedItems.length}
+          className={`px-4 py-2 rounded-md ${
+            selectedItems.length
+              ? "bg-green-600 hover:bg-green-700 text-white cursor-pointer"
+              : "bg-gray-400 text-gray-200 cursor-not-allowed"
+          }`}
+        >
+          ➕ Add Group
+        </button>
+
         </div>
 
         <div className="overflow-x-auto">
@@ -308,29 +492,45 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                     <td className="border-t px-3 py-2 text-center">{it.id}</td>
                     <td className="border-t px-3 py-2">{it.description}</td>
                     <td className="border-t px-3 py-2 text-center">
-                      <select
-                        value={selectedItemId === it.id ? it.selectedGroup || "" : ""}
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(it.id)}
                         onChange={(e) => {
-                          const gid = e.target.value;
-                          if (gid) {
-                            it.selectedGroup = gid;
-                            openSplitModal(it, gid);
+                          if (e.target.checked) {
+                            setSelectedItems((prev) => [...prev, it.id]);
+                          } else {
+                            setSelectedItems((prev) => prev.filter((id) => id !== it.id));
                           }
                         }}
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm cursor-pointer focus:ring-1 focus:ring-blue-400 focus:border-blue-500 transition-all"
-                      >
-                        <option value="">Select Group</option>
-                        {(data.groups || []).map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                          </option>
-                        ))}
-                      </select>
+                        className="cursor-pointer accent-blue-600 w-4 h-4"
+                      />
+
+                      {/* 🟢 Add to existing group dropdown */}
+                      {(data.groups || []).length > 0 && (
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              addItemToExistingGroup(it.id, e.target.value);
+                              e.target.value = "";
+                            }
+                          }}
+                          className="ml-2 text-xs border border-gray-300 rounded-md px-2 py-1 cursor-pointer focus:ring-1 focus:ring-blue-400"
+                        >
+                          <option value="">Add to Group</option>
+                          {(data.groups || []).map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
 
                       <div className="text-xs text-gray-500 mt-1">
                         Assigned: {assignedQtyMap[it.id] || 0} / {it.qty}
                       </div>
                     </td>
+
                   </tr>
                 ))
               ) : (
@@ -441,6 +641,41 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                 </div>
               </div>
 
+             {/* ⚖️ Group / Box Weight */}
+              <div className="flex items-center gap-3 mb-4">
+                <label className="text-sm text-gray-700 font-medium">
+                  {(() => {
+                    if (activeGroup?.type) return `${activeGroup.type} Weight (KGS)`;
+                    const clean = (activeGroup?.name || "")
+                      .replace(/\d+/g, "")
+                      .trim()
+                      .replace(/\s{2,}/g, " ");
+                    return `${clean || "Package"} Weight (KGS)`;
+                  })()}
+                </label>
+
+                <input
+                  type="number"
+                  step="0.01"
+                  value={activeGroup.boxWeight || ""}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    const groups = (data.groups || []).map((g) => {
+                      if (g.id !== activeGroup.id) return g;
+
+                      const netWeight = parseFloat(g.netWeight) || 0;
+                      const grossWeight = +(netWeight + value).toFixed(2);
+                      return { ...g, boxWeight: value, grossWeight };
+                    });
+                    onChange({ ...data, groups });
+                  }}
+                  placeholder="Enter box weight"
+                  className="w-28 border border-gray-300 rounded-md px-2 py-1 text-right focus:ring-1 focus:ring-blue-400 focus:border-blue-500"
+                />
+              </div>
+
+
+
               {/* ✅ Group Net & Editable Gross (added) */}
               <div className="text-right mt-2 text-sm">
                 <p>
@@ -492,8 +727,35 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                           {it.description || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          {it.qty ?? ""}
+                          <input
+                            type="number"
+                            value={it.qty}
+                            onChange={(e) => {
+                              const requested = parseFloat(e.target.value) || 0;
+                              const outsideRemaining = getRemainingForItem(it.id, activeGroup.id);
+                              const currentInThisGroup = parseFloat(it.qty) || 0;
+                              const maxAllowed = +(outsideRemaining + currentInThisGroup).toFixed(6);
+
+                              const finalQty = requested > maxAllowed ? maxAllowed : requested;
+                              if (requested > maxAllowed) {
+                                alert(`Max allowed for this item is ${maxAllowed}`);
+                              }
+
+                              const newGroups = (data.groups || []).map((g) => {
+                                if (g.id !== activeGroup.id) return g;
+                                const updatedItems = (g.items || []).map((gi) =>
+                                  gi.id === it.id ? { ...gi, qty: finalQty } : gi
+                                );
+                                return { ...g, items: updatedItems };
+                              });
+
+                              onChange({ ...data, groups: newGroups });
+                            }}
+                            className="w-16 text-center border border-gray-300 rounded px-1 py-0.5"
+                          />
                         </td>
+
+
                         <td className="border-t px-2 py-2 text-center">
                           {it.unit || ""}
                         </td>
@@ -538,6 +800,12 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
         <p className="font-semibold">
           Total Gross Weight: {totalGross.toFixed(2)} KGS
         </p>
+        <button
+          onClick={() => generatePDF(data)}
+          className="mt-4 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md cursor-pointer"
+        >
+          📄 Generate PDF
+        </button>
       </div>
 
       {/* 🔹 Split Qty Modal */}
@@ -577,144 +845,167 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
         </div>
       )}
 
-      {/* ➕ Add Group Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white w-96 rounded-xl shadow-2xl p-6">
-            <h3 className="text-lg font-semibold mb-4">🆕 Create New Group</h3>
 
-            {/* Group Name */}
+      {/* 🆕 Add Group Modal */}
+      {showModal && 
+      <div className="bg-white w-96 rounded-xl shadow-2xl p-6">
+        <h3 className="text-lg font-semibold mb-4">🆕 Create New Package</h3>
+
+        {/* Package Type */}
+        <label className="block mb-2 text-sm text-gray-700 font-medium">
+          Select Package Type:
+        </label>
+        <select
+          id="package-type"
+          className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+        >
+          <option value="Box">Box</option>
+          <option value="Pallet">Pallet</option>
+          <option value="Carton Box">Carton Box</option>
+          <option value="Loose Pipe">Loose Pipe</option>
+        </select>
+
+        {/* Group Name */}
+        <label className="block mb-2 text-sm text-gray-700 font-medium">
+          Group Name:
+        </label>
+        <input
+          ref={inputRef}
+          type="text"
+          value={newGroupName}
+          onChange={(e) => setNewGroupName(e.target.value)}
+          placeholder="Enter custom group name"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+        />
+
+        {/* Dimensions */}
+        <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
+          <div>
+            <label>Length (cm)</label>
             <input
-              ref={inputRef}
-              type="text"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="Enter group name"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              type="number"
+              id="group-length"
+              placeholder="L"
+              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+              onChange={() => updateCBMInput()}
             />
-
-            {/* 📏 Dimensions Input */}
-            <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
-              <div>
-                <label>Length (cm)</label>
-                <input
-                  type="number"
-                  id="group-length"
-                  placeholder="L"
-                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-                  onChange={(e) => {
-                    const length = parseFloat(e.target.value) || 0;
-                    const width = parseFloat(document.getElementById("group-width")?.value) || 0;
-                    const height = parseFloat(document.getElementById("group-height")?.value) || 0;
-                    const cbm = ((length * width * height) / 1000000).toFixed(3);
-                    document.getElementById("group-cbm").value = cbm;
-                  }}
-                />
-              </div>
-
-              <div>
-                <label>Width (cm)</label>
-                <input
-                  type="number"
-                  id="group-width"
-                  placeholder="W"
-                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-                  onChange={(e) => {
-                    const width = parseFloat(e.target.value) || 0;
-                    const length = parseFloat(document.getElementById("group-length")?.value) || 0;
-                    const height = parseFloat(document.getElementById("group-height")?.value) || 0;
-                    const cbm = ((length * width * height) / 1000000).toFixed(3);
-                    document.getElementById("group-cbm").value = cbm;
-                  }}
-                />
-              </div>
-
-              <div>
-                <label>Height (cm)</label>
-                <input
-                  type="number"
-                  id="group-height"
-                  placeholder="H"
-                  className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-                  onChange={(e) => {
-                    const height = parseFloat(e.target.value) || 0;
-                    const length = parseFloat(document.getElementById("group-length")?.value) || 0;
-                    const width = parseFloat(document.getElementById("group-width")?.value) || 0;
-                    const cbm = ((length * width * height) / 1000000).toFixed(3);
-                    document.getElementById("group-cbm").value = cbm;
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* CBM Display */}
-            <div className="mb-4 text-right text-sm text-gray-700">
-              <strong>CBM:</strong>{" "}
-              <input
-                id="group-cbm"
-                type="text"
-                value="0.000"
-                readOnly
-                className="w-24 text-right border border-gray-300 bg-gray-100 rounded px-2 py-1 font-semibold"
-              />{" "}
-              m³
-            </div>
-
-            <div className="flex justify-end gap-3 mt-5">
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setNewGroupName("");
-                }}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm cursor-pointer"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={() => {
-                  const length = parseFloat(document.getElementById("group-length")?.value) || 0;
-                  const width = parseFloat(document.getElementById("group-width")?.value) || 0;
-                  const height = parseFloat(document.getElementById("group-height")?.value) || 0;
-                  const cbm = parseFloat(document.getElementById("group-cbm")?.value) || 0;
-
-                  if (!newGroupName.trim()) {
-                    alert("Please enter a group name.");
-                    return;
-                  }
-                  if (!length || !width || !height) {
-                    alert("Please enter all dimensions before creating a group.");
-                    return;
-                  }
-
-                  const newGroup = {
-                    id: Date.now(),
-                    name: newGroupName.trim(),
-                    items: [],
-                    length,
-                    width,
-                    height,
-                    cbm,
-                  };
-
-                  const groups = [...(data.groups || []), newGroup];
-                  onChange({ ...data, groups });
-                  setActiveTab(newGroup.id);
-                  setNewGroupName("");
-                  setShowModal(false);
-                }}
-                className={`px-4 py-2 text-sm rounded-md ${
-                  newGroupName.trim()
-                    ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                    : "bg-gray-300 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                Create
-              </button>
-            </div>
+          </div>
+          <div>
+            <label>Width (cm)</label>
+            <input
+              type="number"
+              id="group-width"
+              placeholder="W"
+              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+              onChange={() => updateCBMInput()}
+            />
+          </div>
+          <div>
+            <label>Height (cm)</label>
+            <input
+              type="number"
+              id="group-height"
+              placeholder="H"
+              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+              onChange={() => updateCBMInput()}
+            />
           </div>
         </div>
-      )}
+
+        <div className="mb-4 text-right text-sm text-gray-700">
+          <strong>CBM:</strong>{" "}
+          <input
+            id="group-cbm"
+            type="text"
+            value="0.000"
+            readOnly
+            className="w-24 text-right border border-gray-300 bg-gray-100 rounded px-2 py-1 font-semibold"
+          />{" "}
+          m³
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 mt-5">
+          <button
+            onClick={() => {
+              setShowModal(false);
+              setNewGroupName("");
+            }}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm cursor-pointer"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => {
+              const packageType = document.getElementById("package-type").value;
+              const packageNum = packageNumbers[packageType];
+              const groupLabel = `${packageType} #${packageNum}`;
+
+              const length = parseFloat(document.getElementById("group-length")?.value) || 0;
+              const width  = parseFloat(document.getElementById("group-width")?.value) || 0;
+              const height = parseFloat(document.getElementById("group-height")?.value) || 0;
+              const cbmCalc = length && width && height ? +((length * width * height) / 1_000_000).toFixed(3) : 0;
+
+              if (!selectedItems.length) {
+                alert("Please select items first.");
+                return;
+              }
+              if (!length || !width || !height) {
+                alert("Please enter all dimensions before creating a group.");
+                return;
+              }
+
+              const selectedGroupItems = items
+                .filter((it) => selectedItems.includes(it.id))
+                .map((it) => {
+                  const remaining = getRemainingForItem(it.id);
+                  if (remaining <= 0) return null;
+                  return { ...it, qty: remaining };
+                })
+                .filter(Boolean);
+
+              if (!selectedGroupItems.length) {
+                alert("Selected items have no remaining quantity to assign.");
+                return;
+              }
+
+              const newGroup = {
+                id: Date.now(),
+                name: newGroupName || groupLabel,
+                type: packageType,
+                number: packageNum,
+                items: selectedGroupItems,
+                length,
+                width,
+                height,
+                cbm: cbmCalc,
+                boxWeight: 0,
+                netWeight: 0,
+                grossWeight: 0,
+              };
+
+              const updatedGroups = [...(data.groups || []), newGroup];
+              setPackageNumbers({ ...packageNumbers, [packageType]: packageNum + 1 });
+              setSelectedItems([]);
+              onChange({ ...data, groups: updatedGroups });
+              setActiveTab(newGroup.id);
+              setNewGroupName("");
+              setShowModal(false);
+            }}
+            className={`px-4 py-2 text-sm rounded-md ${
+              newGroupName.trim() || selectedItems.length
+                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                : "bg-gray-300 text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+
+      }
+
     </div>
   );
 }

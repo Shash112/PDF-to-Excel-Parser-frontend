@@ -158,7 +158,6 @@ export default function App() {
               const enrichedItems = (parsedData.items || []).map((it) => ({
                 ...it,
                 hsCode: assignHsCode(it.description),
-                origin: "UAE",
                 unitWeight: it.unitWeight || "",
                 totalWeight: it.totalWeight || "",
               }));
