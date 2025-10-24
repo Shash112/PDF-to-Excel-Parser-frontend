@@ -1,21 +1,19 @@
 import React from "react";
 
-export default function CommonHeader({ header, title, onChange, uniqueHsCodes }) {
-  const setHeader = (k, v) =>
-    onChange((prev) => ({
-      ...prev,
-      header: { ...prev.header, [k]: v },
-    }));
+export default function CommonHeader({ header, title, uniqueHsCodes }) {
+  
+  // const setHeader = (k, v) =>
+  //   onChange((prev) => ({
+  //     ...prev,
+  //     header: { ...prev.header, [k]: v },
+  //   }));
 
-  // ✅ Helper to ensure "-CI" suffix
-  const ensureCISuffix = (value = "") => {
-    if (!value) return "";
-    const cleanValue = value.trim();
-    return cleanValue.toUpperCase().endsWith("-CI")
-      ? cleanValue
-      : `${cleanValue}-CI`;
-  };
-  console.log(header);
+  // // ✅ Helper to ensure "-CI" suffix
+  // const ensureCISuffix = (value = "") => {
+  //   if (!value) return "";
+  //   const cleanValue = value.trim();
+  //   return cleanValue.toUpperCase().endsWith("-CI") ? cleanValue : `${cleanValue}-CI`;
+  // };
 
   return (
     <>
@@ -51,7 +49,9 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
           <tr>
             <td className="border border-gray-400 p-3 align-top w-1/2">
               <strong>CONSIGNEE :</strong>
-              <textarea
+              <p>{header.buyer || ""}</p>
+              <p>{header.buyerAddress || ""}</p>
+              {/* <textarea
                 rows={1}
                 value={header.buyer || ""}
                 onChange={(e) => setHeader("buyer", e.target.value)}
@@ -62,25 +62,27 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                 value={header.buyerAddress || ""}
                 onChange={(e) => setHeader("buyerAddress", e.target.value)}
                 className="w-full mt-1 border border-gray-300 rounded p-1"
-              />
+              /> */}
 
             </td>
             <td className="border border-gray-400 p-3 align-top">
               <div className="space-y-2">
                 <div>
                   <strong>DATE :</strong>{" "}
-                  <input
+                  <p>{header.orderDate || ""}</p>
+                  {/* <input
                     type="text"
                     value={header.orderDate || ""}
                     onChange={(e) => setHeader("orderDate", e.target.value)}
                     className="border border-gray-300 rounded p-1 ml-1 w-44"
-                  />
+                  /> */}
                 </div>
 
                 {/* ✅ INV. NO auto-suffix with -CI */}
                 <div>
                   <strong>INV. NO :</strong>{" "}
-                  <input
+                  <p>{header.salesOrderNo || ""}</p>
+                  {/* <input
                     type="text"
                     value={ensureCISuffix(header.salesOrderNo || "")}
                     onChange={(e) =>
@@ -88,17 +90,18 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                     }
                     className="border border-gray-300 rounded p-1 ml-1 w-44 uppercase"
                     placeholder="Enter Invoice No"
-                  />
+                  /> */}
                 </div>
 
                 <div>
                   <strong>PO Number :</strong>{" "}
-                  <input
+                  <p>{header.refNo || ""}</p>
+                  {/* <input
                     type="text"
                     value={header.refNo || ""}
                     onChange={(e) => setHeader("refNo", e.target.value)}
                     className="border border-gray-300 rounded p-1 ml-1 w-44"
-                  />
+                  /> */}
                 </div>
               </div>
             </td>
@@ -114,7 +117,8 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
               {/* Mode of Shipment Dropdown */}
               <div className="mt-2 flex items-center gap-2">
                 <strong>MODE OF SHIPMENT :</strong>
-                <select
+                <p>{header.modeOfShipment || ""}</p>
+                {/* <select
                   value={header.modeOfShipment || ""}
                   onChange={(e) => setHeader("modeOfShipment", e.target.value)}
                   className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
@@ -124,13 +128,14 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                   <option value="SEA">SEA</option>
                   <option value="LAND">LAND</option>
                   <option value="COURIER">COURIER</option>
-                </select>
+                </select> */}
               </div>
 
               {/* Freight Terms Dropdown */}
               <div className="mt-2 flex items-center gap-2">
                 <strong>FREIGHT TERMS :</strong>
-                <select
+                <p>{header.freightTerms || ""}</p>
+                {/* <select
                   value={header.freightTerms || ""}
                   onChange={(e) => setHeader("freightTerms", e.target.value)}
                   className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
@@ -140,37 +145,41 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                   <option value="DDP">DDP</option>
                   <option value="FOB">FOB</option>
                   <option value="CIF">CIF</option>
-                </select>
+                </select> */}
               </div>
 
               {/* Loading & Discharge */}
               <div className="mt-2">
                 <strong>PLACE OF LOADING :</strong>{" "}
-                <input
+                <p>{header.placeOfLoading || ""}</p>
+                {/* <input
                   type="text"
                   value={header.placeOfLoading || ""}
                   onChange={(e) => setHeader("placeOfLoading", e.target.value)}
                   className="border border-gray-300 rounded p-1 ml-1 w-64"
-                />
+                /> */}
               </div>
 
               <div className="mt-1">
                 <strong>PLACE OF DISCHARGE :</strong>{" "}
-                <input
+                <p>{header.placeOfDischarge || ""}</p>
+                {/* <input
                   type="text"
                   value={header.placeOfDischarge || ""}
                   onChange={(e) =>
                     setHeader("placeOfDischarge", e.target.value)
                   }
                   className="border border-gray-300 rounded p-1 ml-1 w-64"
-                />
+                /> */}
               </div>
             </td>
 
             {/* Sold To */}
             <td className="border border-gray-400 p-3 align-top w-1/2">
               <strong>SOLD TO / INVOICED TO :</strong>
-              <textarea
+              <p>{header.buyer || ""}</p>
+              <p>{header.buyerAddress || ""}</p>
+              {/* <textarea
                 rows={1}
                 value={header.buyer || ""}
                 onChange={(e) => setHeader("buyer", e.target.value)}
@@ -181,7 +190,7 @@ export default function CommonHeader({ header, title, onChange, uniqueHsCodes })
                 value={header.buyerAddress || ""}
                 onChange={(e) => setHeader("buyerAddress", e.target.value)}
                 className="w-full mt-1 border border-gray-300 rounded p-1"
-              />
+              /> */}
             </td>
           </tr>
 

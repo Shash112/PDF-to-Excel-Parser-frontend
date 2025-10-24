@@ -1,21 +1,20 @@
-import React, { useMemo, useEffect  } from "react";
+import React, { useMemo, useEffect } from "react";
 import CommonHeader from "./CommanHeader";
 
 export default function PackingListPreview({ data, onChange }) {
   const { header = {}, groups = [], items = [] } = data;
 
- // Helper: safe total weight
-  const calcTotal = (qty, unitWeight) => {
-    const q = parseFloat((qty ?? "").toString().replace(/,/g, ""));
-    const u = parseFloat((unitWeight ?? "").toString().replace(/,/g, ""));
-    if (!Number.isFinite(q) || !Number.isFinite(u)) return "";
-    const tw = q * u;
-    return Number.isFinite(tw) ? +tw.toFixed(2) : "";
-  };
-
   // ✅ Capitalize helper
   const capitalizeName = (name = "") =>
     name.charAt(0).toUpperCase() + name.slice(1);
+
+  // ✅ Inline row total weight helper (lightweight, no group calc)
+  const getRowTotal = (qty, unitWeight) => {
+    const q = parseFloat(qty) || 0;
+    const u = parseFloat(unitWeight) || 0;
+    const tw = q * u;
+    return tw > 0 ? tw.toFixed(2) : "—";
+  };
 
   // ✅ Unique HS Codes
   const uniqueHsCodes = useMemo(() => {
@@ -27,99 +26,54 @@ export default function PackingListPreview({ data, onChange }) {
     return Array.from(hsSet);
   }, [items, groups]);
 
-  // ✅ Compute group & total weights
+  // ✅ Use existing stored weights from previous screen
   const { groupWeights, totalNet, totalGross } = useMemo(() => {
     let groupWeights = [];
     let totalNet = 0;
+    let totalGross = 0;
 
     if ((groups || []).length > 0) {
       groupWeights = groups.map((g) => {
-        let net = 0;
-        (g.items || []).forEach((it) => {
-          const tw = calcTotal(it.qty, it.unitWeight);
-          if (tw) net += tw;
-        });
-
-        const gross =
-          parseFloat(g.grossWeight || 0) > 0
-            ? parseFloat(g.grossWeight)
-            : +(net * 1.04).toFixed(2);
-
+        const net = parseFloat(g.netWeight) || 0;
+        const gross = parseFloat(g.grossWeight) || 0;
         totalNet += net;
-        return { id: g.id, name: g.name, net: +net.toFixed(2), gross };
-      });
-    } else {
-      (items || []).forEach((it) => {
-        const tw = calcTotal(it.qty, it.unitWeight);
-        if (tw) totalNet += tw;
+        totalGross += gross;
+        return { id: g.id, name: g.name, net, gross };
       });
     }
 
-    const totalGross =
-      groupWeights.length > 0
-        ? groupWeights.reduce((acc, g) => acc + (g.gross || 0), 0)
-        : +(totalNet * 1.04).toFixed(2);
+    return {
+      groupWeights,
+      totalNet: +totalNet.toFixed(2),
+      totalGross: +totalGross.toFixed(2),
+    };
+  }, [groups]);
 
-    return { groupWeights, totalNet: +totalNet.toFixed(2), totalGross };
-  }, [items, groups]);
-
-  // ✅ Update editable fields
-  const handleGroupFieldChange = (gid, field, value) => {
-    const newGroups = (data.groups || []).map((g) => {
-      if (g.id !== gid) return g;
-
-      const updated = { ...g, [field]: value };
-
-      // ✅ Auto-calculate CBM when dimensions change
-      const L = parseFloat(updated.length) || 0;
-      const W = parseFloat(updated.width) || 0;
-      const H = parseFloat(updated.height) || 0;
-      updated.cbm = L && W && H ? parseFloat(((L * W * H) / 1000000).toFixed(3)) : "";
-
-      return updated;
-    });
-    onChange({ ...data, groups: newGroups });
-  };
-
-  // ✅ Update editable gross weight
-  const handleGrossWeightChange = (gid, value) => {
-    handleGroupFieldChange(gid, "grossWeight", value);
-  };
-
-  // ✅ Auto-packing summary (case-insensitive, merges name variants like "Box 1", "Box 2", "Container A", etc.)
+  // ✅ Auto-packing summary
   const autoPackingSummary = useMemo(() => {
     if (!(groups || []).length) return "";
 
     const normalizeName = (name = "") => {
-      // Normalize casing and trim spaces
       name = name.trim().toLowerCase();
-
-      // ✅ Remove trailing numbers, special chars, and extra spaces (e.g., "box 1", "box_2" → "box")
-      name = name.replace(/[\s_-]*\d+$/g, ""); // removes trailing numbers like 1, 2, 03
-      name = name.replace(/\s+\([^)]*\)$/g, ""); // removes parentheses suffix like "Box (A)"
-      name = name.replace(/\s{2,}/g, " "); // collapse double spaces
-
+      name = name.replace(/[\s_-]*\d+$/g, "");
+      name = name.replace(/\s+\([^)]*\)$/g, "");
+      name = name.replace(/\s{2,}/g, " ");
       return name;
     };
 
     const countMap = new Map();
-
     (groups || []).forEach((g) => {
       const rawName = g.name?.trim() || "unknown";
       const key = normalizeName(rawName);
-
-      // Increment count
       countMap.set(key, (countMap.get(key) || 0) + 1);
     });
 
-    // Build readable summary (capitalize each group name)
     return Array.from(countMap.entries())
       .map(([name, count]) => `${count} ${capitalizeName(name)}`)
       .join(", ");
   }, [groups]);
 
-
-    useEffect(() => {
+  useEffect(() => {
     if (autoPackingSummary) {
       onChange({
         ...data,
@@ -132,8 +86,6 @@ export default function PackingListPreview({ data, onChange }) {
   }, [autoPackingSummary]);
 
   const showGroups = (groups || []).length > 0;
-  const setHeader = (k, v) =>
-    onChange({ ...data, header: { ...header, [k]: v } });
 
   return (
     <div className="bg-white border rounded-lg shadow p-6 w-full">
@@ -141,7 +93,6 @@ export default function PackingListPreview({ data, onChange }) {
       <CommonHeader
         header={header}
         title="PACKING LIST"
-        onChange={onChange}
         uniqueHsCodes={uniqueHsCodes}
       />
 
@@ -153,35 +104,51 @@ export default function PackingListPreview({ data, onChange }) {
             <thead className="bg-gray-100">
               <tr className="text-center">
                 <th className="border border-gray-400 px-2 py-1 w-10">SR</th>
-                <th className="border border-gray-400 px-2 py-1 text-left">DESCRIPTION</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">
+                  DESCRIPTION
+                </th>
                 <th className="border border-gray-400 px-2 py-1 w-16">QTY</th>
                 <th className="border border-gray-400 px-2 py-1 w-16">UOM</th>
-                <th className="border border-gray-400 px-2 py-1 w-24">H.S. CODE</th>
-                <th className="border border-gray-400 px-2 py-1 w-20">ORIGIN</th>
-                <th className="border border-gray-400 px-2 py-1 w-28">UNIT WT / KGS</th>
-                <th className="border border-gray-400 px-2 py-1 w-28">TOTAL WT / KGS</th>
+                <th className="border border-gray-400 px-2 py-1 w-24">
+                  H.S. CODE
+                </th>
+                <th className="border border-gray-400 px-2 py-1 w-20">
+                  ORIGIN
+                </th>
+                <th className="border border-gray-400 px-2 py-1 w-28">
+                  UNIT WT / KGS
+                </th>
+                <th className="border border-gray-400 px-2 py-1 w-28">
+                  TOTAL WT / KGS
+                </th>
               </tr>
             </thead>
             <tbody>
-              {items.map((it, i) => {
-                const rowTW = calcTotal(it.qty, it.unitWeight);
-                return (
-                  <tr key={it.id} className="even:bg-gray-50 hover:bg-blue-50">
-                    <td className="border border-gray-400 px-2 py-1 text-center">{i + 1}</td>
-                    <td className="border border-gray-400 px-2 py-1">{it.description}</td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">{it.qty}</td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">{it.unit}</td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">{it.hsCode}</td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">{it.origin}</td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">
-                      {it.unitWeight || "—"}
-                    </td>
-                    <td className="border border-gray-400 px-2 py-1 text-center">
-                      {rowTW !== "" ? rowTW : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
+              {items.map((it, i) => (
+                <tr
+                  key={it.id}
+                  className="even:bg-gray-50 hover:bg-blue-50 text-center"
+                >
+                  <td className="border border-gray-400 px-2 py-1">{i + 1}</td>
+                  <td className="border border-gray-400 px-2 py-1 text-left">
+                    {it.description}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-1">{it.qty}</td>
+                  <td className="border border-gray-400 px-2 py-1">{it.unit}</td>
+                  <td className="border border-gray-400 px-2 py-1">
+                    {it.hsCode}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-1">
+                    {it.origin}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-1">
+                    {it.unitWeight || "—"}
+                  </td>
+                  <td className="border border-gray-400 px-2 py-1">
+                    {getRowTotal(it.qty, it.unitWeight)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -189,7 +156,7 @@ export default function PackingListPreview({ data, onChange }) {
         // 🔹 Grouped items
         (groups || []).map((g, gi) => (
           <div key={g.id} className="mb-8">
-            {/* Group header with dimensions + CBM */}
+            {/* Group header */}
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">
                 {g.name}{" "}
@@ -201,8 +168,6 @@ export default function PackingListPreview({ data, onChange }) {
                   <span className="text-gray-400 text-sm">(No dimensions)</span>
                 )}
               </div>
-              {/* Editable fields for LWH */}
-              
             </div>
 
             {/* Items under group */}
@@ -211,13 +176,23 @@ export default function PackingListPreview({ data, onChange }) {
                 <thead className="bg-gray-100">
                   <tr className="text-center">
                     <th className="border border-gray-400 px-2 py-1 w-10">SR</th>
-                    <th className="border border-gray-400 px-2 py-1 text-left">DESCRIPTION</th>
+                    <th className="border border-gray-400 px-2 py-1 text-left">
+                      DESCRIPTION
+                    </th>
                     <th className="border border-gray-400 px-2 py-1 w-16">QTY</th>
                     <th className="border border-gray-400 px-2 py-1 w-16">UOM</th>
-                    <th className="border border-gray-400 px-2 py-1 w-24">H.S. CODE</th>
-                    <th className="border border-gray-400 px-2 py-1 w-20">ORIGIN</th>
-                    <th className="border border-gray-400 px-2 py-1 w-28">UNIT WT / KGS</th>
-                    <th className="border border-gray-400 px-2 py-1 w-28">TOTAL WT / KGS</th>
+                    <th className="border border-gray-400 px-2 py-1 w-24">
+                      H.S. CODE
+                    </th>
+                    <th className="border border-gray-400 px-2 py-1 w-20">
+                      ORIGIN
+                    </th>
+                    <th className="border border-gray-400 px-2 py-1 w-28">
+                      UNIT WT / KGS
+                    </th>
+                    <th className="border border-gray-400 px-2 py-1 w-28">
+                      TOTAL WT / KGS
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,45 +206,51 @@ export default function PackingListPreview({ data, onChange }) {
                       </td>
                     </tr>
                   ) : (
-                    g.items.map((it, i) => {
-                      const rowTW = calcTotal(it.qty, it.unitWeight);
-                      return (
-                        <tr key={`${g.id}-${it.id}-${i}`} className="even:bg-gray-50 hover:bg-blue-50">
-                          <td className="border border-gray-400 px-2 py-1 text-center">{i + 1}</td>
-                          <td className="border border-gray-400 px-2 py-1">{it.description}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{it.qty}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{it.unit}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{it.hsCode}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{it.origin}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">
-                            {it.unitWeight || "—"}
-                          </td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">
-                            {rowTW !== "" ? rowTW : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })
+                    g.items.map((it, i) => (
+                      <tr
+                        key={`${g.id}-${it.id}-${i}`}
+                        className="even:bg-gray-50 hover:bg-blue-50 text-center"
+                      >
+                        <td className="border border-gray-400 px-2 py-1">
+                          {i + 1}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1 text-left">
+                          {it.description}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {it.qty}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {it.unit}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {it.hsCode}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {it.origin}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {it.unitWeight || "—"}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-1">
+                          {getRowTotal(it.qty, it.unitWeight)}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
 
-            {/* ✅ Group Net & Editable Gross */}
+            {/* ✅ Group Net & Gross (using stored values) */}
             <div className="text-right mt-2 text-sm">
               <p>
-                <strong>Group Net Weight:</strong> {groupWeights[gi]?.net || 0} KGS
+                <strong>Group Net Weight:</strong>{" "}
+                {g.netWeight || groupWeights[gi]?.net || 0} KGS
               </p>
-              <p className="flex items-center justify-end gap-2">
-                <strong>Group Gross Weight:</strong>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={g.grossWeight || groupWeights[gi]?.gross || ""}
-                  onChange={(e) => handleGrossWeightChange(g.id, e.target.value)}
-                  className="border border-gray-300 rounded-md px-2 py-0.5 w-28 text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
-                />
-                <span>KGS</span>
+              <p>
+                <strong>Group Gross Weight:</strong>{" "}
+                {g.grossWeight || groupWeights[gi]?.gross || 0} KGS
               </p>
             </div>
           </div>
@@ -279,26 +260,10 @@ export default function PackingListPreview({ data, onChange }) {
       {/* ✅ Packing Details */}
       <div className="mt-4 border-t border-gray-300 pt-3 text-sm">
         <strong>PACKING DETAILS:</strong>
-        <textarea
-          rows={3}
-          value={header.packingDetails || autoPackingSummary}
-          onChange={(e) => setHeader("packingDetails", e.target.value)}
-          className="w-full border border-gray-400 rounded p-1 mt-1"
-          placeholder="Example: 2 Box, 3 Wooden Box"
-        />
+        <p>{header.packingDetails || autoPackingSummary}</p>
         <strong className="block mt-4">SHIPPING MARKS:</strong>
-        <textarea
-          rows={1}
-          value={header.buyer || header.buyer || ""}
-          onChange={(e) => setHeader("buyer", e.target.value)}
-          className="w-full border border-gray-400 rounded p-1 mt-1"
-        />
-        <textarea
-          rows={4}
-          value={header.buyerAddress || header.buyerAddress || ""}
-          onChange={(e) => setHeader("buyerAddress", e.target.value)}
-          className="w-full border border-gray-400 rounded p-1 mt-1"
-        />
+        <p>{header.buyer || ""}</p>
+        <p>{header.buyerAddress || ""}</p>
       </div>
 
       {/* ✅ Totals */}

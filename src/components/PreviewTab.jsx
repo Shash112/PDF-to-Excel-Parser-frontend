@@ -1,16 +1,23 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import html2canvas from "html2canvas-pro";
+import jsPDF from "jspdf";
+
 import PackingListPreview from "./PackingListPreview";
 import InvoicePreview from "./InvoicePreview";
 import { buildExcelHeader } from "../utils/buildExcelHeader";
 import numberToWords from "number-to-words";
 
 export default function PreviewTabs({ data, onChange, onPrev }) {
-  const [activeTab, setActiveTab] = useState("PL"); // PL | INV
+  const [activeTab, setActiveTab] = useState("PL");
+  const [showDropdown, setShowDropdown] = useState(false);
   const { header = {}, items = [], groups = [], totals = {} } = data;
 
-  // ✅ Compute unique HS Codes (used for both sheets)
+  const plRef = useRef();
+  const invRef = useRef();
+
+  // ✅ Compute unique HS Codes
   const uniqueHsCodes = useMemo(() => {
     const hsSet = new Set();
     (items || []).forEach((it) => it.hsCode && hsSet.add(it.hsCode));
@@ -20,13 +27,48 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     return Array.from(hsSet);
   }, [items, groups]);
 
-  // 🧾 Export Both Sheets (PL + INV) into one Excel
+  /** =============================
+   *  📄 EXPORT SINGLE COMPONENT TO PDF
+   * ============================= */
+  const exportSinglePDF = async (element, title) => {
+    if (!element) return;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    let position = 0;
+    let heightLeft = imgHeight;
+
+    while (heightLeft > 0) {
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+      if (heightLeft > 0) {
+        pdf.addPage();
+        position = -pdfHeight;
+      }
+    }
+
+    pdf.save(title);
+  };
+
+  /** =============================
+   *  💾 EXPORT BOTH TO EXCEL
+   * ============================= */
   const exportBothToExcel = () => {
     const wb = XLSX.utils.book_new();
 
-    /** =============================
-     *  🧾 PACKING LIST SHEET
-     * ============================= */
+    /** 🧾 PACKING LIST SHEET */
     const pl_data = [
       ...buildExcelHeader(header, uniqueHsCodes, "PACKING LIST"),
       ["SR NO", "DESCRIPTION", "QTY", "UOM", "H.S. CODE", "ORIGIN", "UNIT WEIGHT / KGS", "TOTAL WEIGHT / KGS"],
@@ -39,8 +81,8 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       groups.forEach((g) => {
         pl_data.push([]);
         pl_data.push([`${g.name}`]);
-
         let groupNet = 0;
+
         (g.items || []).forEach((it, idx) => {
           const qty = parseFloat(it.qty || 0);
           const uw = parseFloat(it.unitWeight || 0);
@@ -92,7 +134,6 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     pl_data.push([]);
     pl_data.push(["PACKING DETAILS", header.packingDetails || ""]);
     pl_data.push(["SHIPPING MARKS", header.buyer || ""]);
-    pl_data.push([]);
 
     const wsPL = XLSX.utils.aoa_to_sheet(pl_data);
     wsPL["!cols"] = [
@@ -107,9 +148,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     ];
     XLSX.utils.book_append_sheet(wb, wsPL, "Packing_List");
 
-    /** =============================
-     *  💰 INVOICE SHEET
-     * ============================= */
+    /** 💰 INVOICE SHEET */
     const inv_data = [
       ...buildExcelHeader(header, uniqueHsCodes, "COMMERCIAL INVOICE"),
       ["SR NO", "DESCRIPTION", "QTY", "UOM", "H.S. CODE", "ORIGIN", "UNIT PRICE / AED", "TOTAL VALUE / AED"],
@@ -131,32 +170,22 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     inv_data.push([]);
     inv_data.push(["", "", "", "", "", "", "Sub Total:", totals?.subTotal || ""]);
     inv_data.push(["", "", "", "", "", "", "Total:", totals?.total || ""]);
-
     inv_data.push([]);
     inv_data.push(["", "", "", "", "", "", "TOTAL VALUE IN AED.", totals?.total || ""]);
     inv_data.push([]);
     inv_data.push([
-    `IN WORDS : `+ (() => {
-                        const total = parseFloat(
-                            (totals?.total || "0").toString().replace(/,/g, "")
-                        );
-                        const words = numberToWords.toWords(total);
-                        return `AED ${words.charAt(0).toUpperCase() + words.slice(1)} Only`;
-                        })(),
+      `IN WORDS : AED ${numberToWords
+        .toWords(parseFloat((totals?.total || "0").toString().replace(/,/g, "")))
+        .replace(/^\w/, (c) => c.toUpperCase())} Only`,
     ]);
     inv_data.push([]);
-    inv_data.push([
-    "PACKING DETAILS:",
-    header.packingDetails || "",
-    ]);
-    inv_data.push([]);
+    inv_data.push(["PACKING DETAILS:", header.packingDetails || ""]);
     inv_data.push(["SHIPPING MARKS:", header.buyer || ""]);
 
     const wsINV = XLSX.utils.aoa_to_sheet(inv_data);
     wsINV["!cols"] = wsPL["!cols"];
     XLSX.utils.book_append_sheet(wb, wsINV, "Invoice");
 
-    /** ✅ Final Save */
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(
       new Blob([wbout], { type: "application/octet-stream" }),
@@ -164,8 +193,25 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     );
   };
 
+  const handleDownloadPL = async () => {
+    const fileName = `PackingList_${header.salesOrderNo || "Export"}.pdf`;
+    await exportSinglePDF(plRef.current, fileName);
+    setShowDropdown(false);
+  };
+
+  const handleDownloadINV = async () => {
+    const fileName = `Invoice_${header.salesOrderNo || "Export"}.pdf`;
+    await exportSinglePDF(invRef.current, fileName);
+    setShowDropdown(false);
+  };
+
+  const handleDownloadExcel = () => {
+    exportBothToExcel();
+    setShowDropdown(false);
+  };
+
   return (
-    <div className="bg-white border rounded-lg shadow p-6 w-full">
+    <div className="bg-white border rounded-lg shadow p-6 w-full relative">
       {/* Tabs Header */}
       <div className="flex justify-between mb-6 items-center">
         <div className="flex gap-2">
@@ -179,33 +225,72 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              {tab === "PL" ? "🧾 Packing List" :"💰 Invoice" }
+              {tab === "PL" ? "🧾 Packing List" : "💰 Invoice"}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 relative">
           <button
             onClick={onPrev}
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
           >
             ◀ Back
           </button>
-          <button
-            onClick={exportBothToExcel}
-            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            ⬇ Export Both (Excel)
-          </button>
+
+          {/* ✅ Export Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown((prev) => !prev)}
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              ⬇ Export ▼
+            </button>
+
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-52 bg-white border rounded shadow-lg z-10">
+                {
+                  activeTab === "PL" ?
+                  <button
+                  onClick={handleDownloadPL}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  🧾 Download Packing List (PDF)
+                </button>
+                : 
+                <button
+                  onClick={handleDownloadINV}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  💰 Download Invoice (PDF)
+                </button>
+                }
+                
+                
+                <button
+                  onClick={handleDownloadExcel}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  📊 Download Both (Excel)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      
+
       {/* Tab Content */}
-      {activeTab === "PL" ? (
-        <PackingListPreview data={data} onChange={onChange} />
-      ) : (
-        <InvoicePreview data={data} onChange={onChange} />
-      )}
+      <div className="relative">
+        {/* Packing List */}
+        <div ref={plRef} className={activeTab === "PL" ? "block" : "hidden"}>
+          <PackingListPreview data={data} onChange={onChange} />
+        </div>
+
+        {/* Invoice */}
+        <div ref={invRef} className={activeTab === "INV" ? "block" : "hidden"}>
+          <InvoicePreview data={data} onChange={onChange} />
+        </div>
+      </div>
     </div>
   );
 }

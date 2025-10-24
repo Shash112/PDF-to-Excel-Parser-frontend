@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import CommonHeader from "./CommanHeader";
 import numberToWords from "number-to-words";
 
-export default function InvoicePreview({ data, onChange }) {
+export default function InvoicePreview({ data }) {
   const { header = {}, items = [], totals = {} } = data;
   const [priceText, setPriceText] = useState("");
 
@@ -49,7 +49,6 @@ export default function InvoicePreview({ data, onChange }) {
       <CommonHeader
         header={{ ...header, documentTitle: "INVOICE" }}
         title={"INVOICE"}
-        onChange={(updatedData) => onChange(updatedData)}
         uniqueHsCodes={uniqueHsCodes}
       />
 
@@ -128,13 +127,14 @@ export default function InvoicePreview({ data, onChange }) {
             <tr>
               <td className="border border-gray-400 px-3 py-2 text-left" colSpan={10}>
                 <strong>IN WORDS :</strong> {" "}
-                  <input
+                <span>{priceText || ""}</span>
+                  {/* <input
                     type="text"
                     value={priceText || ""}
                     onChange={(e) => setPriceText(e.target.value)}
                     className="border border-gray-400 rounded p-1 ml-2 w-64"
                     placeholder="price-in-words"
-                  />
+                  /> */}
                     {/* {(() => {
                       try {
                         const raw = (totals?.total ?? "").toString().trim().replace(/,/g, "");

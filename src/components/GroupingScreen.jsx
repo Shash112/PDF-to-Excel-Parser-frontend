@@ -9,6 +9,10 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   const [newGroupName, setNewGroupName] = useState("");
   const inputRef = useRef(null);
 
+  const { header = {}, items = [], groups = [], totals = {} } = data;
+
+  console.log(header);
+  console.log(totals);
   // ✅ Calculate already assigned qty for each item
   const assignedQtyMap = useMemo(() => {
     const map = {};
@@ -29,10 +33,120 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     });
   }, [data.items, assignedQtyMap]);
 
+  // Helper: safe total weight
+  const calcTotal = (qty, unitWeight) => {
+    const q = parseFloat((qty ?? "").toString().replace(/,/g, ""));
+    const u = parseFloat((unitWeight ?? "").toString().replace(/,/g, ""));
+    if (!Number.isFinite(q) || !Number.isFinite(u)) return "";
+    const tw = q * u;
+    return Number.isFinite(tw) ? +tw.toFixed(2) : "";
+  };
+
   const allGrouped = ungroupedItems.length === 0;
   const activeGroup = (data.groups || []).find((g) => g.id === activeTab);
 
+  // =======================
+  // ✅ Net & Gross Weights
+  // =======================
+  // Compute per-group net and suggested gross (if user hasn't entered a valid one)
+  const { groupWeights, totalNet, totalGross } = useMemo(() => {
+    let groupWeights = [];
+    let totalNet = 0;
+
+    if ((groups || []).length > 0) {
+      groupWeights = groups.map((g) => {
+        let net = 0;
+        (g.items || []).forEach((it) => {
+          const tw = calcTotal(it.qty, it.unitWeight);
+          if (tw) net += tw;
+        });
+
+        const netRounded = +net.toFixed(2);
+        // if g.grossWeight exists and >= net, use it; otherwise default to net * 1.04
+        const userGross = parseFloat(g.grossWeight);
+        const autoGross = +(netRounded * 1.04).toFixed(2);
+        const gross =
+          Number.isFinite(userGross) && userGross >= netRounded ? +userGross.toFixed(2) : autoGross;
+
+        totalNet += netRounded;
+        return { id: g.id, name: g.name, net: netRounded, gross };
+      });
+    } else {
+      (items || []).forEach((it) => {
+        const tw = calcTotal(it.qty, it.unitWeight);
+        if (tw) totalNet += tw;
+      });
+    }
+
+    const totalGross =
+      groupWeights.length > 0
+        ? groupWeights.reduce((acc, g) => acc + (g.gross || 0), 0)
+        : +(totalNet * 1.04).toFixed(2);
+
+    return { groupWeights, totalNet: +totalNet.toFixed(2), totalGross: +totalGross.toFixed(2) };
+  }, [items, groups]);
+
+  // Persist netWeight and grossWeight into group objects so they’re available on the next screen
+  useEffect(() => {
+    if (!Array.isArray(groupWeights) || !groupWeights.length) return;
+    const updated = (groups || []).map((g) => {
+      const gw = groupWeights.find((x) => x.id === g.id);
+      if (!gw) return g;
+      // Keep user's gross if (still) >= net; else use computed gross
+      const currentGross = parseFloat(g.grossWeight);
+      const finalGross =
+        Number.isFinite(currentGross) && currentGross >= gw.net ? +currentGross.toFixed(2) : gw.gross;
+
+      // Only update if something changed to avoid extra renders
+      if (g.netWeight === gw.net && g.grossWeight === finalGross) return g;
+      return { ...g, netWeight: gw.net, grossWeight: finalGross };
+    });
+
+    const changed =
+      updated.length !== groups.length ||
+      updated.some((g, i) => g.netWeight !== groups[i].netWeight || g.grossWeight !== groups[i].grossWeight);
+
+    if (changed) onChange({ ...data, groups: updated });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupWeights]);
+
+  // ✅ Update editable gross weight (cannot be less than net)
+  const handleGrossWeightChange = (gid, value) => {
+    const newGroups = (data.groups || []).map((g) => {
+      if (g.id !== gid) return g;
+
+      const netWeight = parseFloat(g.netWeight || 0);
+      const newGross = parseFloat(value);
+
+      if (!Number.isFinite(newGross) || newGross < netWeight) {
+        alert(`Gross weight cannot be less than Net Weight (${netWeight} KGS).`);
+        return g;
+      }
+      return { ...g, grossWeight: +newGross.toFixed(2) };
+    });
+
+    onChange({ ...data, groups: newGroups });
+  };
+
+  // const handleGroupFieldChange = (gid, field, value) => {
+  //   const newGroups = (data.groups || []).map((g) => {
+  //     if (g.id !== gid) return g;
+
+  //     const updated = { ...g, [field]: value };
+
+  //     // ✅ Auto-calculate CBM when dimensions change
+  //     const L = parseFloat(updated.length) || 0;
+  //     const W = parseFloat(updated.width) || 0;
+  //     const H = parseFloat(updated.height) || 0;
+  //     updated.cbm = L && W && H ? parseFloat(((L * W * H) / 1000000).toFixed(3)) : "";
+
+  //     return updated;
+  //   });
+  //   onChange({ ...data, groups: newGroups });
+  // };
+
   // ✅ Auto focus for "Add Group" modal
+  
   useEffect(() => {
     if (showModal && inputRef.current) {
       setTimeout(() => inputRef.current.focus(), 100);
@@ -327,6 +441,27 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                 </div>
               </div>
 
+              {/* ✅ Group Net & Editable Gross (added) */}
+              <div className="text-right mt-2 text-sm">
+                <p>
+                  <strong>Group Net Weight:</strong>{" "}
+                  {activeGroup.netWeight || 0} KGS
+                </p>
+                <p className="flex items-center justify-end gap-2">
+                  <strong>Group Gross Weight:</strong>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={activeGroup.grossWeight ?? ""}
+                    onChange={(e) =>
+                      handleGrossWeightChange(activeGroup.id, e.target.value)
+                    }
+                    className="border border-gray-300 rounded-md px-2 py-0.5 w-28 text-right focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                  />
+                  <span>KGS</span>
+                </p>
+              </div>
+
               {/* Group Items */}
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
@@ -394,6 +529,16 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
           )}
         </div>
       )}
+
+      {/* ✅ Totals (added) */}
+      <div className="w-full max-w-7xl mt-6 text-right text-gray-700">
+        <p className="font-semibold">
+          Total Net Weight: {totalNet.toFixed(2)} KGS
+        </p>
+        <p className="font-semibold">
+          Total Gross Weight: {totalGross.toFixed(2)} KGS
+        </p>
+      </div>
 
       {/* 🔹 Split Qty Modal */}
       {splitQtyModal && (
@@ -570,7 +715,6 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
