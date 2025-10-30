@@ -1,40 +1,15 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import CommonHeader from "./CommanHeader";
-import numberToWords from "number-to-words";
 
 export default function InvoicePreview({ data }) {
   const { header = {}, items = [], totals = {} } = data;
-  const [priceText, setPriceText] = useState("");
+  const [priceText] = useState(totals?.totalInWords || "AED Zero Only");
 
-  useEffect(() => {
-    (() => {
-      try {
-        // 🧹 Step 1: Convert to string and clean unwanted chars
-        const raw = (totals?.total ?? "").toString();
-        const cleaned = raw.replace(/[^0-9.]/g, ""); // ✅ keep only digits & decimal
+  // ✅ Calculate total quantity of all items
+  const totalQty = useMemo(() => {
+    return (items || []).reduce((sum, it) => sum + parseFloat(it.qty || 0), 0);
+  }, [items]);
 
-        // 🧮 Step 2: Parse as float
-        const numericValue = parseFloat(cleaned);
-
-        // 🧱 Step 3: Validate
-        if (!Number.isFinite(numericValue)) throw new Error("Invalid number");
-
-        // 🧾 Step 4: Split for whole and decimal part
-        const [whole, fraction] = cleaned.split(".");
-
-        // 🗣 Step 5: Convert to words
-        const words = numberToWords.toWords(Math.floor(whole || 0));
-        const fractionText = fraction && parseInt(fraction) > 0
-            ? ` and ${fraction}/100`
-            : ``;
-
-        setPriceText(`${words.charAt(0).toUpperCase() + words.slice(1)}${fractionText} Only`);
-      } catch {
-        // 🧯 Fallback for invalid data
-        setPriceText("Zero Only");
-      }
-    })()
-  },[totals?.total])
   
   // ✅ Compute Unique HS Codes (same logic as PackingListPreview)
   const uniqueHsCodes = useMemo(() => {
@@ -110,7 +85,7 @@ export default function InvoicePreview({ data }) {
                 TOTAL VALUE IN AED.
               </td>
               <td className="border border-gray-400 px-3 py-2 text-center w-20">
-                {items.length}
+                {totalQty.toFixed(2)}
               </td>
               <td className="border border-gray-400 px-3 py-2 text-center w-20">
                 Nos
@@ -126,32 +101,7 @@ export default function InvoicePreview({ data }) {
             {/* IN WORDS */}
             <tr>
               <td className="border border-gray-400 px-3 py-2 text-left" colSpan={10}>
-                <strong>IN WORDS :</strong> {" "}
-                <span>{priceText || ""}</span>
-                  {/* <input
-                    type="text"
-                    value={priceText || ""}
-                    onChange={(e) => setPriceText(e.target.value)}
-                    className="border border-gray-400 rounded p-1 ml-2 w-64"
-                    placeholder="price-in-words"
-                  /> */}
-                    {/* {(() => {
-                      try {
-                        const raw = (totals?.total ?? "").toString().trim().replace(/,/g, "");
-                        const numericValue = parseFloat(raw);
-                        if (!Number.isFinite(numericValue)) throw new Error("Invalid number");
-
-                        const [whole, fraction] = raw.split(".");
-                        const words = numberToWords.toWords(Math.floor(whole));
-                        const fractionText = fraction
-                          ? ` and ${fraction.padEnd(2, "0").slice(0, 2)}/100`
-                          : "";
-
-                        return `AED ${words.charAt(0).toUpperCase() + words.slice(1)}${fractionText} Only`;
-                      } catch {
-                        return "AED Zero Only";
-                      }
-                    })()} */}
+                <strong>IN WORDS :</strong> {priceText}
               </td>
             </tr>
 

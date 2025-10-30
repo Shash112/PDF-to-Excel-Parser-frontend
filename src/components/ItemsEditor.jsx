@@ -1,124 +1,45 @@
 import React, { useState } from "react";
-import { itemsData } from "../data/itemsData"; // adjust path if needed
 
-// ✅ HS Code to Country Mapping
-const hsCodeCountryMap = {
-  "73079100": [
-    "South Korea",
-    "Spain",
-    "Italy",
-    "China",
-    "India",
-    "United Kingdom",
-    "Other",
-  ],
-  "73079900": [
-    "Thailand",
-    "South Korea",
-    "Italy",
-    "China",
-    "India",
-    "United Kingdom",
-    "Austria",
-    "Saudi Arabia",
-    "Taiwan",
-    "Other",
-  ],
-  "73041900": [
-    "Ukraine",
-    "South Korea",
-    "Italy",
-    "China",
-    "Argentina",
-    "Germany",
-    "Spain",
-    "Brazil",
-    "Romania",
-    "South Africa",
-    "India",
-    "Japan",
-    "UAE",
-    "Other",
-  ],
-  "73072100": [
-    "Germany",
-    "Italy",
-    "India",
-    "China",
-    "United Kingdom",
-    "Netherlands",
-    "Other",
-  ],
-  "73072900": [
-    "Thailand",
-    "Austria",
-    "South Korea",
-    "Germany",
-    "China",
-    "India",
-    "Italy",
-  ],
-  "73044100": [
-    "China",
-    "India",
-    "Spain",
-    "Italy",
-    "Taiwan",
-    "Germany",
-    "Japan",
-    "Netherlands",
-    "Other",
-  ],
-};
-
-
-// ✅ Build fast lookup maps for weight by itemCode & description
-const itemWeightMap = (() => {
-  const map = new Map();
-  for (const item of itemsData) {
-    if (item.itemCode)
-      map.set(item.itemCode.trim().toLowerCase(), item.unitWeight);
-    if (item.description)
-      map.set(item.description.trim().toLowerCase(), item.unitWeight);
-  }
-  return map;
-})();
-
-// ✅ Helper function to get weight
-const getUnitWeight = (itemCode, description) => {
-  if (itemCode) {
-    const key = itemCode.trim().toLowerCase();
-    if (itemWeightMap.has(key)) return itemWeightMap.get(key);
-  }
-  if (description) {
-    const key = description.trim().toLowerCase();
-    if (itemWeightMap.has(key)) return itemWeightMap.get(key);
-  }
-  return "";
-};
-
-export default function ItemsEditor({ data, onChange, onNext, assignHsCode }) {
+export default function ItemsEditor({ data, onChange, onNext }) {
 
   console.log("Items editor: ", data)
   const [splitModal, setSplitModal] = useState(null);
   const [splitParts, setSplitParts] = useState([]);
 
-  const openSplitModal = (item, index) => {
-    const remainingQty = parseFloat(item.qty) || 0;
-    if (!remainingQty || remainingQty <= 1) {
-      alert("Quantity must be greater than 1 to split.");
-      return;
-    }
+const openSplitModal = (item, index) => {
+  const remainingQty = parseFloat(item.qty) || 0;
+  if (!remainingQty || remainingQty <= 1) {
+    alert("Quantity must be greater than 1 to split.");
+    return;
+  }
 
-    setSplitModal({ item, index });
-    setSplitParts([{ qty: "", origin: "" }]);
-  };
+  const groupId = item.splitGroupId || item.id;
+  const existingSplits = data.items.filter(
+    (it) => it.splitGroupId === groupId
+  );
+
+  if (existingSplits.length >= 1) {
+    setSplitParts(
+      existingSplits.map((it) => ({
+        qty: it.qty,
+        origin: it.origin,
+        customOrigin: it.customOrigin || "",
+      }))
+    );
+  } else {
+    setSplitParts([{ qty: "", origin: "", customOrigin: "" }]);
+  }
+
+  setSplitModal({ item, index, splitGroupId: groupId });
+};
+
+
 
   const handleSplitPartChange = (idx, field, value) => {
-  const newParts = [...splitParts];
-  newParts[idx][field] = value;
-  setSplitParts(newParts);
-};
+    const newParts = [...splitParts];
+    newParts[idx][field] = value;
+    setSplitParts(newParts);
+  };
 
 const addSplitRow = () => {
   setSplitParts((prev) => [...prev, { qty: "", origin: "" }]);
@@ -136,45 +57,54 @@ const saveSplit = () => {
   const itemQty = parseFloat(splitModal.item.qty) || 0;
 
   if (totalSplit !== itemQty) {
-    alert(`Total split quantity (${totalSplit}) must equal item quantity (${itemQty}).`);
+    alert(
+      `Total split quantity (${totalSplit}) must equal item quantity (${itemQty}).`
+    );
     return;
   }
 
   const baseItem = splitModal.item;
+  const splitGroupId = baseItem.splitGroupId || baseItem.id;
+
+  // ✅ Create new split entries
   const newItems = splitParts.map((p, idx) => ({
     ...baseItem,
     id: `${baseItem.id}-${idx + 1}`,
+    splitGroupId,
     qty: parseFloat(p.qty),
     origin: p.origin,
+    customOrigin: p.origin === "Other" ? p.customOrigin || "" : "",
     totalWeight:
       parseFloat(p.qty) * parseFloat(baseItem.unitWeight || 0) || 0,
   }));
 
-  const updatedItems = data.items.flatMap((it, i) =>
-    i === splitModal.index ? newItems : it
+  // ✅ Find the first index of the item/group in the current list
+  const firstIndex = data.items.findIndex(
+    (it) => it.splitGroupId === splitGroupId || it.id === splitModal.item.id
   );
+
+  // ✅ Filter out the existing items that belong to the same group
+  const remainingItems = data.items.filter(
+    (it) => it.splitGroupId !== splitGroupId && it.id !== splitModal.item.id
+  );
+
+  // ✅ Insert the new splits back into the same position
+  const updatedItems = [
+    ...remainingItems.slice(0, firstIndex),
+    ...newItems,
+    ...remainingItems.slice(firstIndex),
+  ];
 
   onChange({ ...data, items: updatedItems });
   setSplitModal(null);
   setSplitParts([]);
 };
-
-
   
 const handleItemChange = (idx, field, value) => {
   const items = data.items.map((it, i) => {
     if (i !== idx) return it;
 
     const updatedItem = { ...it, [field]: value };
-
-    // 🧩 Auto-fill unit weight if description or itemCode is changed
-    if (field === "description" || field === "itemCode") {
-      const foundWeight = getUnitWeight(updatedItem.itemCode, updatedItem.description);
-      console.log("Found Weight: ", foundWeight);
-      if (foundWeight) {
-        updatedItem.unitWeight = foundWeight;
-      }
-    }
 
     // ✅ Auto-calculate Total Weight when qty or unitWeight changes
     if (["qty", "unitWeight", "description", "itemCode"].includes(field)) {
@@ -229,14 +159,6 @@ const handleItemChange = (idx, field, value) => {
         header: { ...prev.header, [k]: v },
     }));
 
-  const autoHs = () => {
-    const items = data.items.map((it) => ({
-      ...it,
-      hsCode: assignHsCode(it.description),
-    }));
-    onChange({ ...data, items });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-12">
       {/* Floating Header Bar */}
@@ -246,12 +168,7 @@ const handleItemChange = (idx, field, value) => {
         </h1>
 
         <div className="flex gap-3">
-          <button
-            onClick={autoHs}
-            className="px-5 py-2.5 cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow transition-all"
-          >
-            ⚙️ Auto HS Codes
-          </button>
+         
           <button
             onClick={onNext}
             className="px-5 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow transition-all"
@@ -281,11 +198,6 @@ const handleItemChange = (idx, field, value) => {
             </p>
           </div>
         </div>
-
-        {/* Title */}
-        <h2 className="text-lg font-bold text-center underline mb-4">
-          {"No Title"}
-        </h2>
 
         {/* Header Info */}
         <table className="w-full border border-gray-400 mb-4 text-sm">
@@ -522,39 +434,50 @@ const handleItemChange = (idx, field, value) => {
                         className="w-full text-center p-1.5 border border-gray-300 rounded-lg text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
                       />
                     </td>
-
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
-                    {hsCodeCountryMap[it.hsCode] ? (
-                      <select
-                        value={it.origin || ""}
-                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
-                      >
-                        <option value="">Select Country</option>
-                        {hsCodeCountryMap[it.hsCode].map((country) => (
-                          <option key={country} value={country}>
-                            {country}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={it.origin || ""}
-                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
-                        placeholder="Country"
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
-                      />
-                    )}
-                    {it.origin === "Other" && (
-                      <input
-                        type="text"
-                        onChange={(e) => handleItemChange(i, "origin", e.target.value)}
-                        placeholder="Enter custom country"
-                        className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
-                      />
-                    )}
-                  </td>
+                      {it.originCountries && it.originCountries.length > 0 ? (
+                        <>
+                          <select
+                            value={it.origin || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              handleItemChange(i, "origin", value);
+                              if (value !== "Other") {
+                                handleItemChange(i, "customOrigin", "");
+                              }
+                            }}
+                            className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                          >
+                            <option value="">Select Country</option>
+                            {it.originCountries.map((country) => (
+                              <option key={country} value={country}>
+                                {country}
+                              </option>
+                            ))}
+                          </select>
+
+                          {it.origin === "Other" && (
+                            <input
+                              type="text"
+                              value={it.customOrigin || ""}
+                              onChange={(e) =>
+                                handleItemChange(i, "customOrigin", e.target.value)
+                              }
+                              placeholder="Enter custom country"
+                              className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <input
+                          type="text"
+                          value={it.origin || ""}
+                          onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                          placeholder="Country"
+                          className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                        />
+                      )}
+                    </td>
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
                       {/* <p>{it.unitWeight || ""}</p> */}
                       <input
@@ -628,17 +551,19 @@ const handleItemChange = (idx, field, value) => {
 
                     {/* Origin Dropdown / Input (based on HS Code) */}
                     <td className="border px-2 py-2 text-center">
-                      {hsCodeCountryMap[splitModal.item.hsCode] ? (
+                     {splitModal.item.originCountries && splitModal.item.originCountries.length > 0 ? (
                         <>
                           <select
                             value={part.origin || ""}
-                            onChange={(e) =>
-                              handleSplitPartChange(idx, "origin", e.target.value)
-                            }
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              handleSplitPartChange(idx, "origin", value);
+                              if (value !== "Other") handleSplitPartChange(idx, "customOrigin", "");
+                            }}
                             className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
                           >
                             <option value="">Select Country</option>
-                            {hsCodeCountryMap[splitModal.item.hsCode].map((country) => (
+                            {splitModal.item.originCountries.map((country) => (
                               <option key={country} value={country}>
                                 {country}
                               </option>
@@ -650,7 +575,7 @@ const handleItemChange = (idx, field, value) => {
                               type="text"
                               value={part.customOrigin || ""}
                               onChange={(e) =>
-                                handleSplitPartChange(idx, "origin", e.target.value)
+                                handleSplitPartChange(idx, "customOrigin", e.target.value)
                               }
                               placeholder="Enter custom country"
                               className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
@@ -668,6 +593,7 @@ const handleItemChange = (idx, field, value) => {
                           className="w-full border border-gray-300 rounded p-1 text-center focus:ring-1 focus:ring-blue-400"
                         />
                       )}
+
                     </td>
 
                     {/* Remove Row */}

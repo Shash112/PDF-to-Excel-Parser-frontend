@@ -7,7 +7,6 @@ import jsPDF from "jspdf";
 import PackingListPreview from "./PackingListPreview";
 import InvoicePreview from "./InvoicePreview";
 import { buildExcelHeader } from "../utils/buildExcelHeader";
-import numberToWords from "number-to-words";
 
 export default function PreviewTabs({ data, onChange, onPrev }) {
   const [activeTab, setActiveTab] = useState("PL");
@@ -79,15 +78,16 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
 
     if ((groups || []).length > 0) {
       groups.forEach((g) => {
+        const groupNet = parseFloat(g.netWeight || 0);
+        const groupGross = parseFloat(g.grossWeight || 0);
+
         pl_data.push([]);
         pl_data.push([`${g.name}`]);
-        let groupNet = 0;
 
         (g.items || []).forEach((it, idx) => {
           const qty = parseFloat(it.qty || 0);
           const uw = parseFloat(it.unitWeight || 0);
           const tw = +(qty * uw).toFixed(2);
-          groupNet += tw;
 
           pl_data.push([
             idx + 1,
@@ -95,15 +95,15 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
             it.qty,
             it.unit,
             it.hsCode,
-            it.origin || "UAE",
-            it.unitWeight || "",
+            it.origin,
+            it.unitWeight,
             tw,
           ]);
         });
 
-        const groupGross = +(groupNet * 1.04).toFixed(2);
         globalNet += groupNet;
         globalGross += groupGross;
+
         pl_data.push(["", "", "", "", "", "", "Group Net Weight:", groupNet]);
         pl_data.push(["", "", "", "", "", "", "Group Gross Weight:", groupGross]);
       });
@@ -120,13 +120,14 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
           it.qty,
           it.unit,
           it.hsCode,
-          it.origin || "UAE",
-          it.unitWeight || "",
+          it.origin,
+          it.unitWeight,
           tw,
         ]);
       });
       globalGross = +(globalNet * 1.04).toFixed(2);
     }
+
 
     pl_data.push([]);
     pl_data.push(["", "", "", "", "", "", "TOTAL NET WEIGHT:", globalNet]);
@@ -161,7 +162,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
         it.qty,
         it.unit,
         it.hsCode,
-        it.origin || "UAE",
+        it.origin,
         it.rate,
         it.amount,
       ]);
@@ -173,11 +174,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     inv_data.push([]);
     inv_data.push(["", "", "", "", "", "", "TOTAL VALUE IN AED.", totals?.total || ""]);
     inv_data.push([]);
-    inv_data.push([
-      `IN WORDS : AED ${numberToWords
-        .toWords(parseFloat((totals?.total || "0").toString().replace(/,/g, "")))
-        .replace(/^\w/, (c) => c.toUpperCase())} Only`,
-    ]);
+    inv_data.push([`IN WORDS : ${totals?.totalInWords || totals?.amountInWords || ""}`],);
     inv_data.push([]);
     inv_data.push(["PACKING DETAILS:", header.packingDetails || ""]);
     inv_data.push(["SHIPPING MARKS:", header.buyer || ""]);

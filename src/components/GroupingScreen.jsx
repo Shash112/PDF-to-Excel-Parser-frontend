@@ -83,7 +83,7 @@ const generatePDF = (data) => {
 export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   const [splitQtyModal, setSplitQtyModal] = useState(null);
   const [splitQty, setSplitQty] = useState("");
-  const [selectedItemId, setSelectedItemId] = useState(null);
+  // const [selectedItemId, setSelectedItemId] = useState(null);
   const [activeTab, setActiveTab] = useState(data.groups?.[0]?.id || null);
   const [showModal, setShowModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -156,7 +156,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   };
 
   const allGrouped = ungroupedItems.length === 0;
-  const activeGroup = (data.groups || []).find((g) => g.id === activeTab);
+  const activeGroup = (groups || []).find((g) => g.id === activeTab);
 
     // =======================
     // ✅ Net & Gross Weights
@@ -261,24 +261,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     };
 
 
-  // const handleGroupFieldChange = (gid, field, value) => {
-  //   const newGroups = (data.groups || []).map((g) => {
-  //     if (g.id !== gid) return g;
-
-  //     const updated = { ...g, [field]: value };
-
-  //     // ✅ Auto-calculate CBM when dimensions change
-  //     const L = parseFloat(updated.length) || 0;
-  //     const W = parseFloat(updated.width) || 0;
-  //     const H = parseFloat(updated.height) || 0;
-  //     updated.cbm = L && W && H ? parseFloat(((L * W * H) / 1000000).toFixed(3)) : "";
-
-  //     return updated;
-  //   });
-  //   onChange({ ...data, groups: newGroups });
-  // };
-
-  // ✅ Auto focus for "Add Group" modal
+   // ✅ Auto focus for "Add Group" modal
   
   useEffect(() => {
     if (showModal && inputRef.current) {
@@ -347,11 +330,11 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   // ==============================
   // 🧮 Split & Assign Logic
   // ==============================
-  const openSplitModal = (item, gid) => {
-    setSplitQtyModal({ item, gid });
-    setSplitQty("");
-    setSelectedItemId(item.id);
-  };
+  // const openSplitModal = (item, gid) => {
+  //   setSplitQtyModal({ item, gid });
+  //   setSplitQty("");
+  //   setSelectedItemId(item.id);
+  // };
 
   const confirmSplitAssign = () => {
     const { item, gid } = splitQtyModal;
@@ -387,13 +370,13 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     onChange({ ...data, groups });
     if (item) item.selectedGroup = "";
     setSplitQtyModal(null);
-    setSelectedItemId(null);
+    // setSelectedItemId(null);
   };
 
   const cancelSplitModal = () => {
     if (splitQtyModal?.item) splitQtyModal.item.selectedGroup = "";
     setSplitQtyModal(null);
-    setSelectedItemId(null);
+    // setSelectedItemId(null);
   };
 
   // ==============================

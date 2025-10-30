@@ -1,19 +1,7 @@
 import React from "react";
 
-export default function CommonHeader({ header, title, uniqueHsCodes }) {
+export default function CommonHeader({ header={}, title="", uniqueHsCodes=[] }) {
   
-  // const setHeader = (k, v) =>
-  //   onChange((prev) => ({
-  //     ...prev,
-  //     header: { ...prev.header, [k]: v },
-  //   }));
-
-  // // ✅ Helper to ensure "-CI" suffix
-  // const ensureCISuffix = (value = "") => {
-  //   if (!value) return "";
-  //   const cleanValue = value.trim();
-  //   return cleanValue.toUpperCase().endsWith("-CI") ? cleanValue : `${cleanValue}-CI`;
-  // };
 
   return (
     <>
@@ -51,18 +39,7 @@ export default function CommonHeader({ header, title, uniqueHsCodes }) {
               <strong>CONSIGNEE :</strong>
               <p>{header.buyer || ""}</p>
               <p>{header.buyerAddress || ""}</p>
-              {/* <textarea
-                rows={1}
-                value={header.buyer || ""}
-                onChange={(e) => setHeader("buyer", e.target.value)}
-                className="w-full mt-1 border border-gray-300 rounded p-1"
-              />
-              <textarea
-                rows={4}
-                value={header.buyerAddress || ""}
-                onChange={(e) => setHeader("buyerAddress", e.target.value)}
-                className="w-full mt-1 border border-gray-300 rounded p-1"
-              /> */}
+             
 
             </td>
             <td className="border border-gray-400 p-3 align-top">
