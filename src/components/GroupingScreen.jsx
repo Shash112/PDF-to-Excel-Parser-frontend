@@ -86,16 +86,9 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   // const [selectedItemId, setSelectedItemId] = useState(null);
   const [activeTab, setActiveTab] = useState(data.groups?.[0]?.id || null);
   const [showModal, setShowModal] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
   const inputRef = useRef(null);
   // 🧮 Track selected items for grouping and package numbering
   const [selectedItems, setSelectedItems] = useState([]);
-  const [packageNumbers, setPackageNumbers] = useState({
-    Box: 1,
-    Pallet: 1,
-    "Carton Box": 1,
-    "Loose Pipe": 1,
-  });
   const { header = {}, items = [], groups = [], totals = {} } = data;
 
 
@@ -829,166 +822,196 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       )}
 
 
-      {/* 🆕 Add Group Modal */}
-      {showModal && 
-      <div className="bg-white w-96 rounded-xl shadow-2xl p-6">
-        <h3 className="text-lg font-semibold mb-4">🆕 Create New Package</h3>
+{/* 🆕 Add Group Modal (Enhanced Dropdown up to 10 with auto-filter + auto-select) */}
+{showModal && (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    onClick={(e) => {
+      // Close modal on background click
+      if (e.target === e.currentTarget) setShowModal(false);
+    }}
+  >
+    <div
+      className="bg-white w-96 rounded-2xl shadow-2xl p-6 animate-[fadeIn_0.2s_ease-in-out]"
+      onClick={(e) => e.stopPropagation()} // Prevent close on inner click
+    >
+      <h3 className="text-lg font-semibold mb-4 text-center">🆕 Create New Package</h3>
 
-        {/* Package Type */}
-        <label className="block mb-2 text-sm text-gray-700 font-medium">
-          Select Package Type:
-        </label>
-        <select
-          id="package-type"
-          className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-        >
-          <option value="Box">Box</option>
-          <option value="Pallet">Pallet</option>
-          <option value="Carton Box">Carton Box</option>
-          <option value="Loose Pipe">Loose Pipe</option>
-        </select>
+      {/* Package Type */}
+      <label className="block mb-2 text-sm text-gray-700 font-medium">
+        Select Package Type:
+      </label>
+      <select
+        id="package-type"
+        onChange={(e) => {
+          const type = e.target.value;
+          const nameDropdown = document.getElementById("group-name-dropdown");
 
-        {/* Group Name */}
-        <label className="block mb-2 text-sm text-gray-700 font-medium">
-          Group Name:
-        </label>
-        <input
-          ref={inputRef}
-          type="text"
-          value={newGroupName}
-          onChange={(e) => setNewGroupName(e.target.value)}
-          placeholder="Enter custom group name"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-        />
+          // Reset dropdown
+          nameDropdown.innerHTML = "<option value=''>Select Group Name</option>";
 
-        {/* Dimensions */}
-        <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
-          <div>
-            <label>Length (cm)</label>
-            <input
-              type="number"
-              id="group-length"
-              placeholder="L"
-              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-              onChange={() => updateCBMInput()}
-            />
-          </div>
-          <div>
-            <label>Width (cm)</label>
-            <input
-              type="number"
-              id="group-width"
-              placeholder="W"
-              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-              onChange={() => updateCBMInput()}
-            />
-          </div>
-          <div>
-            <label>Height (cm)</label>
-            <input
-              type="number"
-              id="group-height"
-              placeholder="H"
-              className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
-              onChange={() => updateCBMInput()}
-            />
-          </div>
-        </div>
+          if (type) {
+            // Find used names for this type
+            const usedNames = (data.groups || [])
+              .filter((g) => g.type === type)
+              .map((g) => g.name);
 
-        <div className="mb-4 text-right text-sm text-gray-700">
-          <strong>CBM:</strong>{" "}
+            // Generate Wooden Box 1–10, but exclude used ones
+            const available = [];
+            for (let i = 1; i <= 10; i++) {
+              const name = `${type} ${i}`;
+              if (!usedNames.includes(name)) available.push(name);
+            }
+
+            // Add remaining names
+            available.forEach((name) => {
+              const opt = document.createElement("option");
+              opt.value = name;
+              opt.textContent = name;
+              nameDropdown.appendChild(opt);
+            });
+
+            // Auto-select first available option if exists
+            if (available.length > 0) {
+              nameDropdown.value = available[0];
+            }
+          }
+        }}
+        className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+      >
+        <option value="">Select Type</option>
+        <option value="Wooden Box">Wooden Box</option>
+        <option value="Wooden Pallet">Wooden Pallet</option>
+        <option value="Carton Box">Carton Box</option>
+        <option value="Loose Pipe">Loose Pipe</option>
+      </select>
+
+      {/* Group Name Dropdown */}
+      <label className="block mb-2 text-sm text-gray-700 font-medium">
+        Select Group Name:
+      </label>
+      <select
+        id="group-name-dropdown"
+        className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+      >
+        <option value="">Select Group Name</option>
+      </select>
+
+      {/* Dimensions */}
+      <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
+        <div>
+          <label>Length (cm)</label>
           <input
-            id="group-cbm"
-            type="text"
-            value="0.000"
-            readOnly
-            className="w-24 text-right border border-gray-300 bg-gray-100 rounded px-2 py-1 font-semibold"
-          />{" "}
-          m³
+            type="number"
+            id="group-length"
+            placeholder="L"
+            className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+            onChange={() => updateCBMInput()}
+          />
         </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 mt-5">
-          <button
-            onClick={() => {
-              setShowModal(false);
-              setNewGroupName("");
-            }}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm cursor-pointer"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={() => {
-              const packageType = document.getElementById("package-type").value;
-              const packageNum = packageNumbers[packageType];
-              const groupLabel = `${packageType} #${packageNum}`;
-
-              const length = parseFloat(document.getElementById("group-length")?.value) || 0;
-              const width  = parseFloat(document.getElementById("group-width")?.value) || 0;
-              const height = parseFloat(document.getElementById("group-height")?.value) || 0;
-              const cbmCalc = length && width && height ? +((length * width * height) / 1_000_000).toFixed(3) : 0;
-
-              if (!selectedItems.length) {
-                alert("Please select items first.");
-                return;
-              }
-              if (!length || !width || !height) {
-                alert("Please enter all dimensions before creating a group.");
-                return;
-              }
-
-              const selectedGroupItems = items
-                .filter((it) => selectedItems.includes(it.id))
-                .map((it) => {
-                  const remaining = getRemainingForItem(it.id);
-                  if (remaining <= 0) return null;
-                  return { ...it, qty: remaining };
-                })
-                .filter(Boolean);
-
-              if (!selectedGroupItems.length) {
-                alert("Selected items have no remaining quantity to assign.");
-                return;
-              }
-
-              const newGroup = {
-                id: Date.now(),
-                name: newGroupName || groupLabel,
-                type: packageType,
-                number: packageNum,
-                items: selectedGroupItems,
-                length,
-                width,
-                height,
-                cbm: cbmCalc,
-                boxWeight: 0,
-                netWeight: 0,
-                grossWeight: 0,
-              };
-
-              const updatedGroups = [...(data.groups || []), newGroup];
-              setPackageNumbers({ ...packageNumbers, [packageType]: packageNum + 1 });
-              setSelectedItems([]);
-              onChange({ ...data, groups: updatedGroups });
-              setActiveTab(newGroup.id);
-              setNewGroupName("");
-              setShowModal(false);
-            }}
-            className={`px-4 py-2 text-sm rounded-md ${
-              newGroupName.trim() || selectedItems.length
-                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                : "bg-gray-300 text-gray-400 cursor-not-allowed"
-            }`}
-          >
-            Create
-          </button>
+        <div>
+          <label>Width (cm)</label>
+          <input
+            type="number"
+            id="group-width"
+            placeholder="W"
+            className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+            onChange={() => updateCBMInput()}
+          />
+        </div>
+        <div>
+          <label>Height (cm)</label>
+          <input
+            type="number"
+            id="group-height"
+            placeholder="H"
+            className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
+            onChange={() => updateCBMInput()}
+          />
         </div>
       </div>
 
-      }
+      <div className="mb-4 text-right text-sm text-gray-700">
+        <strong>CBM:</strong>{" "}
+        <input
+          id="group-cbm"
+          type="text"
+          value="0.000"
+          readOnly
+          className="w-24 text-right border border-gray-300 bg-gray-100 rounded px-2 py-1 font-semibold"
+        />{" "}
+        m³
+      </div>
 
+      {/* Footer Buttons */}
+      <div className="flex justify-end gap-3 mt-5">
+        <button
+          onClick={() => {
+            setShowModal(false);
+          }}
+          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm cursor-pointer"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={() => {
+            const type = document.getElementById("package-type").value;
+            const name = document.getElementById("group-name-dropdown").value;
+            const length =
+              parseFloat(document.getElementById("group-length").value) || 0;
+            const width =
+              parseFloat(document.getElementById("group-width").value) || 0;
+            const height =
+              parseFloat(document.getElementById("group-height").value) || 0;
+            const cbm = +((length * width * height) / 1_000_000).toFixed(3);
+
+            if (!type || !name) return alert("Please select type and name.");
+            if (!length || !width || !height)
+              return alert("Enter all dimensions.");
+
+            // Prevent duplicates
+            const nameExists = (data.groups || []).some((g) => g.name === name);
+            if (nameExists) return alert("That group name already exists.");
+
+            const selectedGroupItems = items
+              .filter((it) => selectedItems.includes(it.id))
+              .map((it) => {
+                const remaining = getRemainingForItem(it.id);
+                return { ...it, qty: remaining };
+              })
+              .filter(Boolean);
+
+            if (!selectedGroupItems.length) return alert("No items selected.");
+
+            const newGroup = {
+              id: Date.now(),
+              name,
+              type,
+              items: selectedGroupItems,
+              length,
+              width,
+              height,
+              cbm,
+              boxWeight: 0,
+              netWeight: 0,
+              grossWeight: 0,
+            };
+
+            const updatedGroups = [...(data.groups || []), newGroup];
+            onChange({ ...data, groups: updatedGroups });
+            setShowModal(false);
+            setSelectedItems([]);
+            setActiveTab(newGroup.id);
+          }}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm cursor-pointer"
+        >
+          Create
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

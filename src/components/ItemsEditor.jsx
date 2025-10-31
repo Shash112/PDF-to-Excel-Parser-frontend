@@ -1,37 +1,129 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function ItemsEditor({ data, onChange, onNext }) {
 
   console.log("Items editor: ", data)
   const [splitModal, setSplitModal] = useState(null);
   const [splitParts, setSplitParts] = useState([]);
+  const [validationErrors, setValidationErrors] = useState({
+    header: {},
+    items: {},
+  });
+  const [isFormValid, setIsFormValid] = useState(false);
 
-const openSplitModal = (item, index) => {
-  const remainingQty = parseFloat(item.qty) || 0;
-  if (!remainingQty || remainingQty <= 1) {
-    alert("Quantity must be greater than 1 to split.");
-    return;
-  }
+  useEffect(() => {
+    validateForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
-  const groupId = item.splitGroupId || item.id;
-  const existingSplits = data.items.filter(
-    (it) => it.splitGroupId === groupId
-  );
 
-  if (existingSplits.length >= 1) {
-    setSplitParts(
-      existingSplits.map((it) => ({
-        qty: it.qty,
-        origin: it.origin,
-        customOrigin: it.customOrigin || "",
-      }))
+  const validateForm = () => {
+    const headerFields = [
+      "buyer",
+      "buyerAddress",
+      "orderDate",
+      "salesOrderNo",
+      "refNo",
+      "modeOfShipment",
+      "freightTerms",
+      "placeOfLoading",
+      "placeOfDischarge",
+    ];
+
+    const newErrors = { header: {}, items: {} };
+    let hasError = false;
+
+    // 🔹 Validate Header
+    headerFields.forEach((key) => {
+      if (!data.header[key] || data.header[key].trim() === "") {
+        newErrors.header[key] = true;
+        hasError = true;
+      }
+    });
+
+    // 🔹 Validate Each Item
+    data.items.forEach((item, i) => {
+      const itemErrors = {};
+      ["itemCode", "description", "qty", "unit", "hsCode", "origin", "unitWeight"].forEach(
+        (field) => {
+          if (
+            item[field] === undefined ||
+            item[field] === "" ||
+            (typeof item[field] === "number" && item[field] <= 0)
+          ) {
+            itemErrors[field] = true;
+            hasError = true;
+          }
+        }
+      );
+      if (Object.keys(itemErrors).length > 0) newErrors.items[i] = itemErrors;
+    });
+
+    setValidationErrors(newErrors);
+    setIsFormValid(!hasError);
+    return !hasError;
+  };
+
+  const handleDeleteItem = (itemToDelete) => {
+    const message = itemToDelete.splitGroupId
+      ? "You are about to delete a split item."
+      : "You are about to delete this item.";
+
+    const userInput = prompt(
+      `${message}\n\nType "confirm" to proceed with deletion:`
     );
-  } else {
-    setSplitParts([{ qty: "", origin: "", customOrigin: "" }]);
-  }
 
-  setSplitModal({ item, index, splitGroupId: groupId });
-};
+    if (!userInput || userInput.toLowerCase().trim() !== "confirm") {
+      alert("❌ Deletion cancelled. Item was not deleted.");
+      return;
+    }
+
+    let updatedItems = data.items.filter((it) => it.id !== itemToDelete.id);
+
+    // ✅ Optional: Reorder split IDs if needed
+    if (itemToDelete.splitGroupId) {
+      const groupId = itemToDelete.splitGroupId;
+      const groupItems = updatedItems.filter((it) => it.splitGroupId === groupId);
+
+      // Reassign sequential IDs (e.g., 1001-1, 1001-2, 1001-3 → after delete becomes 1001-1, 1001-2)
+      groupItems.forEach((it, idx) => {
+        it.id = `${groupId}-${idx + 1}`;
+      });
+    }
+
+    onChange({ ...data, items: updatedItems });
+
+    alert("✅ Item deleted successfully.");
+  };
+
+
+
+  const openSplitModal = (item, index) => {
+    const remainingQty = parseFloat(item.qty) || 0;
+    if (!remainingQty || remainingQty <= 1) {
+      alert("Quantity must be greater than 1 to split.");
+      return;
+    }
+
+    const groupId = item.splitGroupId || item.id;
+    const existingSplits = data.items.filter(
+      (it) => it.splitGroupId === groupId
+    );
+
+    if (existingSplits.length >= 1) {
+      setSplitParts(
+        existingSplits.map((it) => ({
+          qty: it.qty,
+          origin: it.origin,
+          customOrigin: it.customOrigin || "",
+        }))
+      );
+    } else {
+      setSplitParts([{ qty: "", origin: "", customOrigin: "" }]);
+    }
+
+    setSplitModal({ item, index, splitGroupId: groupId });
+  };
 
 
 
@@ -41,108 +133,118 @@ const openSplitModal = (item, index) => {
     setSplitParts(newParts);
   };
 
-const addSplitRow = () => {
-  setSplitParts((prev) => [...prev, { qty: "", origin: "" }]);
-};
+  const addSplitRow = () => {
+    setSplitParts((prev) => [...prev, { qty: "", origin: "" }]);
+  };
 
-const removeSplitRow = (idx) => {
-  setSplitParts((prev) => prev.filter((_, i) => i !== idx));
-};
+  const removeSplitRow = (idx) => {
+    setSplitParts((prev) => prev.filter((_, i) => i !== idx));
+  };
 
-const saveSplit = () => {
-  const totalSplit = splitParts.reduce(
-    (sum, p) => sum + (parseFloat(p.qty) || 0),
-    0
-  );
-  const itemQty = parseFloat(splitModal.item.qty) || 0;
+  const saveSplit = () => {
+    const baseItem = splitModal.item;
+    const splitGroupId = baseItem.splitGroupId || baseItem.id;
 
-  if (totalSplit !== itemQty) {
-    alert(
-      `Total split quantity (${totalSplit}) must equal item quantity (${itemQty}).`
+    // ✅ Get all items in this split group
+    const groupItems = data.items.filter(
+      (it) => it.splitGroupId === splitGroupId || it.id === baseItem.id
     );
-    return;
-  }
 
-  const baseItem = splitModal.item;
-  const splitGroupId = baseItem.splitGroupId || baseItem.id;
+    // ✅ Find total group quantity (sum of all existing splits)
+    const groupTotalQty = groupItems.reduce(
+      (sum, it) => sum + (parseFloat(it.qty) || 0),
+      0
+    );
 
-  // ✅ Create new split entries
-  const newItems = splitParts.map((p, idx) => ({
-    ...baseItem,
-    id: `${baseItem.id}-${idx + 1}`,
-    splitGroupId,
-    qty: parseFloat(p.qty),
-    origin: p.origin,
-    customOrigin: p.origin === "Other" ? p.customOrigin || "" : "",
-    totalWeight:
-      parseFloat(p.qty) * parseFloat(baseItem.unitWeight || 0) || 0,
-  }));
+    // ✅ Calculate total split from user input
+    const totalSplitQty = splitParts.reduce(
+      (sum, p) => sum + (parseFloat(p.qty) || 0),
+      0
+    );
 
-  // ✅ Find the first index of the item/group in the current list
-  const firstIndex = data.items.findIndex(
-    (it) => it.splitGroupId === splitGroupId || it.id === splitModal.item.id
-  );
-
-  // ✅ Filter out the existing items that belong to the same group
-  const remainingItems = data.items.filter(
-    (it) => it.splitGroupId !== splitGroupId && it.id !== splitModal.item.id
-  );
-
-  // ✅ Insert the new splits back into the same position
-  const updatedItems = [
-    ...remainingItems.slice(0, firstIndex),
-    ...newItems,
-    ...remainingItems.slice(firstIndex),
-  ];
-
-  onChange({ ...data, items: updatedItems });
-  setSplitModal(null);
-  setSplitParts([]);
-};
-  
-const handleItemChange = (idx, field, value) => {
-  const items = data.items.map((it, i) => {
-    if (i !== idx) return it;
-
-    const updatedItem = { ...it, [field]: value };
-
-    // ✅ Auto-calculate Total Weight when qty or unitWeight changes
-    if (["qty", "unitWeight", "description", "itemCode"].includes(field)) {
-      const qty = parseFloat(updatedItem.qty || 0);
-      const unitWeight = parseFloat(updatedItem.unitWeight || 0);
-      updatedItem.totalWeight =
-        qty && unitWeight ? (qty * unitWeight).toFixed(2) : "";
+    if (totalSplitQty !== groupTotalQty) {
+      alert(
+        `Total split quantity (${totalSplitQty}) must equal the original item/group quantity (${groupTotalQty}).`
+      );
+      return;
     }
 
-    return updatedItem;
-  });
+    // ✅ Create new split entries
+    const newItems = splitParts.map((p, idx) => ({
+      ...baseItem,
+      id: `${splitGroupId}-${idx + 1}`,
+      splitGroupId,
+      qty: parseFloat(p.qty),
+      origin: p.origin,
+      customOrigin: p.origin === "Other" ? p.customOrigin || "" : "",
+      totalWeight:
+        parseFloat(p.qty) * parseFloat(baseItem.unitWeight || 0) || 0,
+    }));
 
-  let updatedData = { ...data, items };
+    // ✅ Remove old splits for this group
+    const updatedItems = data.items.filter(
+      (it) => it.splitGroupId !== splitGroupId && it.id !== baseItem.id
+    );
 
-  // ✅ Maintain unique origins in header
-  if (field === "origin") {
-    const uniqueOriginMap = new Map();
+    // ✅ Insert new splits in place of first group's original position
+    const firstIndex = data.items.findIndex(
+      (it) => it.splitGroupId === splitGroupId || it.id === baseItem.id
+    );
 
-    items.forEach((it) => {
-      const origin = it.origin?.trim();
-      if (!origin) return;
-      const key = origin.toLowerCase();
-      if (!uniqueOriginMap.has(key)) uniqueOriginMap.set(key, origin);
+    const finalItems = [
+      ...updatedItems.slice(0, firstIndex),
+      ...newItems,
+      ...updatedItems.slice(firstIndex),
+    ];
+
+    // ✅ Update and close modal
+    onChange({ ...data, items: finalItems });
+    setSplitModal(null);
+    setSplitParts([]);
+  };
+
+    
+  const handleItemChange = (idx, field, value) => {
+    const items = data.items.map((it, i) => {
+      if (i !== idx) return it;
+      const updatedItem = { ...it, [field]: value };
+
+      // 🔹 Clear customOrigin when origin changes away from "Other"
+      if (field === "origin" && value !== "Other") {
+        updatedItem.customOrigin = "";
+      }
+
+      // 🔹 Auto-calculate totalWeight
+      if (["qty", "unitWeight"].includes(field)) {
+        const qty = parseFloat(updatedItem.qty || 0);
+        const unitWeight = parseFloat(updatedItem.unitWeight || 0);
+        updatedItem.totalWeight =
+          qty && unitWeight ? Number((qty * unitWeight).toFixed(2)) : "";
+      }
+
+      return updatedItem;
     });
 
-    const uniqueOrigin = Array.from(uniqueOriginMap.values());
-
-    updatedData = {
-      ...updatedData,
-      header: {
+    // 🔹 Always rebuild header.uniqueOrigin on origin/customOrigin updates
+    let updatedData = { ...data, items };
+    if (["origin", "customOrigin"].includes(field)) {
+      const uniqueOriginSet = new Set();
+      items.forEach((row) => {
+        const originValue =
+          row.origin === "Other"
+            ? row.customOrigin?.trim()
+            : row.origin?.trim();
+        if (originValue) uniqueOriginSet.add(originValue);
+      });
+      updatedData.header = {
         ...data.header,
-        uniqueOrigin,
-      },
-    };
-  }
+        uniqueOrigin: Array.from(uniqueOriginSet),
+      };
+    }
 
-  onChange(updatedData);
-};
+    onChange(updatedData);
+  };
+
 
 
   const ensureCISuffix = (value = "") => {
@@ -168,10 +270,18 @@ const handleItemChange = (idx, field, value) => {
         </h1>
 
         <div className="flex gap-3">
-         
           <button
-            onClick={onNext}
-            className="px-5 py-2.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow transition-all"
+            onClick={() => {
+              if (validateForm()) {
+                onNext();
+              }
+            }}
+            disabled={!isFormValid}
+            className={`px-5 py-2.5 rounded-lg shadow text-sm font-medium transition-all
+              ${isFormValid
+                ? "cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
+                : "cursor-not-allowed bg-gray-300 text-gray-500"
+              }`}
           >
             💾 Save & Next
           </button>
@@ -209,14 +319,20 @@ const handleItemChange = (idx, field, value) => {
                   rows={1}
                   value={data.header.buyer || ""}
                   onChange={(e) => setHeader("buyer", e.target.value)}
-                  className="w-full mt-1 border border-gray-300 rounded p-1"
+                  className={`w-full mt-1 border border-gray-300 rounded p-1 ${validationErrors.header.buyer ? "border-red-500" : "border-gray-300"}`}
                 />
+                {validationErrors.header.buyer && (
+                  <p className="text-red-500 text-xs mt-1">Required field</p>
+                )}
                 <textarea
                   rows={4}
                   value={data.header.buyerAddress || ""}
                   onChange={(e) => setHeader("buyerAddress", e.target.value)}
-                  className="w-full mt-1 border border-gray-300 rounded p-1"
+                  className={`w-full mt-1 border border-gray-300 rounded p-1 ${validationErrors.header.buyerAddress ? "border-red-500" : "border-gray-300"}`}
                 />
+                {validationErrors.header.buyerAddress && (
+                  <p className="text-red-500 text-xs mt-1">Required field</p>
+                )}
 
               </td>
               <td className="border border-gray-400 p-3 align-top">
@@ -227,8 +343,11 @@ const handleItemChange = (idx, field, value) => {
                       type="text"
                       value={data.header.orderDate || ""}
                       onChange={(e) => setHeader("orderDate", e.target.value)}
-                      className="border border-gray-300 rounded p-1 ml-1 w-44"
+                      className={`border border-gray-300 rounded p-1 ml-1 w-44 ${validationErrors.header.orderDate ? "border-red-500" : "border-gray-300"}`}
                     />
+                    {validationErrors.header.orderDate && (
+                      <p className="text-red-500 text-xs mt-1">Required field</p>
+                    )}
                   </div>
 
                   {/* ✅ INV. NO auto-suffix with -CI */}
@@ -240,9 +359,12 @@ const handleItemChange = (idx, field, value) => {
                       onChange={(e) =>
                         setHeader("salesOrderNo", ensureCISuffix(e.target.value))
                       }
-                      className="border border-gray-300 rounded p-1 ml-1 w-44 uppercase"
+                      className={`border border-gray-300 rounded p-1 ml-1 w-44 uppercase ${validationErrors.header.salesOrderNo ? "border-red-500" : "border-gray-300"}`}
                       placeholder="Enter Invoice No"
                     />
+                    {validationErrors.header.salesOrderNo && (
+                      <p className="text-red-500 text-xs mt-1">Required field</p>
+                    )}
                   </div>
 
                   <div>
@@ -251,8 +373,11 @@ const handleItemChange = (idx, field, value) => {
                       type="text"
                       value={data.header.refNo || ""}
                       onChange={(e) => setHeader("refNo", e.target.value)}
-                      className="border border-gray-300 rounded p-1 ml-1 w-44"
+                      className={`border border-gray-300 rounded p-1 ml-1 w-44 salesOrderNo ${validationErrors.header.refNo ? "border-red-500" : "border-gray-300"}`}
                     />
+                    {validationErrors.header.refNo && (
+                      <p className="text-red-500 text-xs mt-1">Required field</p>
+                    )}
                   </div>
                 </div>
               </td>
@@ -271,7 +396,7 @@ const handleItemChange = (idx, field, value) => {
                   <select
                     value={data.header.modeOfShipment || ""}
                     onChange={(e) => setHeader("modeOfShipment", e.target.value)}
-                    className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
+                    className={`border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500 ${validationErrors.header.modeOfShipment ? "border-red-500" : "border-gray-300"}`}
                   >
                     <option value="">Select Mode</option>
                     <option value="AIR">AIR</option>
@@ -279,6 +404,9 @@ const handleItemChange = (idx, field, value) => {
                     <option value="LAND">LAND</option>
                     <option value="COURIER">COURIER</option>
                   </select>
+                  {validationErrors.header.modeOfShipment && (
+                    <p className="text-red-500 text-xs mt-1">Required field</p>
+                  )}
                 </div>
               </td>
               <td className="border border-gray-400 p-3 align-top w-1/2">
@@ -288,7 +416,7 @@ const handleItemChange = (idx, field, value) => {
                   <select
                     value={data.header.freightTerms || ""}
                     onChange={(e) => setHeader("freightTerms", e.target.value)}
-                    className="border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500"
+                    className={`border border-gray-300 rounded p-1 w-64 focus:ring-1 focus:ring-blue-500 ${validationErrors.header.freightTerms ? "border-red-500" : "border-gray-300"}`}
                   >
                     <option value="">Select Term</option>
                     <option value="EX-WORKS">EX-WORKS</option>
@@ -296,6 +424,9 @@ const handleItemChange = (idx, field, value) => {
                     <option value="FOB">FOB</option>
                     <option value="CIF">CIF</option>
                   </select>
+                  {validationErrors.header.freightTerms && (
+                    <p className="text-red-500 text-xs mt-1">Required field</p>
+                  )}
                 </div>
               </td>
             </tr>
@@ -308,8 +439,11 @@ const handleItemChange = (idx, field, value) => {
                     type="text"
                     value={data.header.placeOfLoading || ""}
                     onChange={(e) => setHeader("placeOfLoading", e.target.value)}
-                    className="border border-gray-300 rounded p-1 ml-1 w-64"
+                    className={`border border-gray-300 rounded p-1 ml-1 w-64 ${validationErrors.header.placeOfLoading ? "border-red-500" : "border-gray-300"}`}
                   />
+                  {validationErrors.header.placeOfLoading && (
+                    <p className="text-red-500 text-xs mt-1">Required field</p>
+                  )}
                 </div>
               </td>
               <td className="border border-gray-400 p-3 align-top w-1/2">
@@ -321,8 +455,11 @@ const handleItemChange = (idx, field, value) => {
                     onChange={(e) =>
                       setHeader("placeOfDischarge", e.target.value)
                     }
-                    className="border border-gray-300 rounded p-1 ml-1 w-64"
+                    className={`border border-gray-300 rounded p-1 ml-1 w-64 ${validationErrors.header.placeOfDischarge ? "border-red-500" : "border-gray-300"}`}
                   />
+                  {validationErrors.header.placeOfDischarge && (
+                    <p className="text-red-500 text-xs mt-1">Required field</p>
+                  )}
                 </div>
               </td>
             </tr>
@@ -352,6 +489,7 @@ const handleItemChange = (idx, field, value) => {
                 <th className="px-4 py-3 border-b border-gray-300 w-28">
                   Unit Weight (kg)
                 </th>
+                <th className="px-4 py-3 border-b border-gray-300 w-20">Action</th>
                 {/* <th className="px-4 py-3 border-b border-gray-300 w-28">
                   Total Weight (kg)
                 </th> */}
@@ -376,7 +514,7 @@ const handleItemChange = (idx, field, value) => {
                       value={it.itemCode || ""}
                       onChange={(e) => handleItemChange(i, "itemCode", e.target.value)}
                       placeholder="Enter Item Code"
-                      className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                      className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.itemCode ? "border-red-500" : "border-gray-300"}`}
                     />
                   </td>
                     <td className="border-t border-gray-200 px-4 py-2">
@@ -387,7 +525,7 @@ const handleItemChange = (idx, field, value) => {
                           handleItemChange(i, "description", e.target.value)
                         }
                         placeholder="Enter item description..."
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all resize-none"
+                        className={`w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all resize-none ${validationErrors.items[i]?.description ? "border-red-500" : "border-gray-300"}`}
                       />
                     </td>
 
@@ -395,9 +533,15 @@ const handleItemChange = (idx, field, value) => {
                       <div className="flex items-center justify-center gap-2">
                         <input
                           type="number"
-                          readOnly
+                          min="0"
                           value={it.qty || ""}
-                          className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (isNaN(value) || value < 0) return; // prevent negative or invalid input
+                            handleItemChange(i, "qty", value);
+                          }}
+                          placeholder="0"
+                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.qty ? "border-red-500" : "border-gray-300"}`}
                         />
                         {parseFloat(it.qty) > 1 && (
                           <button
@@ -408,7 +552,6 @@ const handleItemChange = (idx, field, value) => {
                           </button>
                         )}
                       </div>
-
                     </td>
 
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
@@ -419,7 +562,7 @@ const handleItemChange = (idx, field, value) => {
                           handleItemChange(i, "unit", e.target.value)
                         }
                         placeholder="PCS / SET"
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unit ? "border-red-500" : "border-gray-300"}`}
                       />
                     </td>
 
@@ -431,22 +574,17 @@ const handleItemChange = (idx, field, value) => {
                           handleItemChange(i, "hsCode", e.target.value)
                         }
                         placeholder="HS Code"
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.hsCode ? "border-red-500" : "border-gray-300"}`}
                       />
                     </td>
+
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
                       {it.originCountries && it.originCountries.length > 0 ? (
                         <>
                           <select
                             value={it.origin || ""}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              handleItemChange(i, "origin", value);
-                              if (value !== "Other") {
-                                handleItemChange(i, "customOrigin", "");
-                              }
-                            }}
-                            className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                            onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                            className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
                           >
                             <option value="">Select Country</option>
                             {it.originCountries.map((country) => (
@@ -464,7 +602,7 @@ const handleItemChange = (idx, field, value) => {
                                 handleItemChange(i, "customOrigin", e.target.value)
                               }
                               placeholder="Enter custom country"
-                              className="mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                              className={`mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
                             />
                           )}
                         </>
@@ -474,32 +612,33 @@ const handleItemChange = (idx, field, value) => {
                           value={it.origin || ""}
                           onChange={(e) => handleItemChange(i, "origin", e.target.value)}
                           placeholder="Country"
-                          className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.origin ? "border-red-500" : "border-gray-300"}`}
                         />
                       )}
                     </td>
+
                     <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      {/* <p>{it.unitWeight || ""}</p> */}
                       <input
                         type="number"
+                        min="0"
                         value={it.unitWeight || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "unitWeight", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (isNaN(value) || value < 0) return; // prevent negative or invalid input
+                          handleItemChange(i, "unitWeight", value);
+                        }}
                         placeholder="0.00"
-                        className="w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400"
+                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unitWeight ? "border-red-500" : "border-gray-300"}`}
                       />
                     </td>
-
-                    {/* <td className="border-t border-gray-200 px-4 py-2 text-center bg-gray-100">
-                      <input
-                        type="text"
-                        value={it.totalWeight || ""}
-                        readOnly
-                        placeholder="Auto"
-                        className="w-full text-center p-1.5 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
-                      />
-                    </td> */}
+                    <td className="border-t border-gray-200 px-4 py-2 text-center">
+                      <button
+                        onClick={() => handleDeleteItem(it)}
+                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
@@ -540,6 +679,7 @@ const handleItemChange = (idx, field, value) => {
                     <td className="border px-2 py-2 text-center">
                       <input
                         type="number"
+                        min={0}
                         value={part.qty}
                         onChange={(e) =>
                           handleSplitPartChange(idx, "qty", e.target.value)
@@ -639,7 +779,6 @@ const handleItemChange = (idx, field, value) => {
           </div>
         </div>
       )}
-
 
     </div>
   );

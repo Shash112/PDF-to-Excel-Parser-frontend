@@ -68,11 +68,11 @@ export default function InvoicePreview({ data }) {
       {/* === Totals Section === */}
       <div className="text-right mt-6 text-sm border-t border-gray-300 pt-3">
         <p>
-          <strong>Subtotal:</strong> {totals?.subTotal || 0} AED
+          <strong>Total:</strong> {totals?.subTotal || 0} AED
         </p>
-        <p>
+        {/* <p>
           <strong>Total:</strong> {totals?.total || 0} AED
-        </p>
+        </p> */}
       </div>
 
       {/* === Footer Section (Newly Added) === */}
@@ -94,7 +94,7 @@ export default function InvoicePreview({ data }) {
                 AED
               </td>
               <td className="border border-gray-400 px-3 py-2 text-right font-bold">
-                {totals?.total || "0.00"}
+                {totals?.subTotal || "0.00"}
               </td>
             </tr>
 
