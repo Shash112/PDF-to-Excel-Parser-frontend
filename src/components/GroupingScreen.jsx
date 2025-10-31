@@ -2,52 +2,134 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const generatePDF = (data) => {
-  const doc = new jsPDF("p", "mm", "a4");
 
-  const addPageHeader = (groupName) => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Packing List Summary", 14, 15);
+const generatePDF = async (data) => {
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Sales Order No: ${data.header?.salesOrderNo || "N/A"}`, 14, 22);
-    doc.text(`PO Number: ${data.header?.refNo || "N/A"}`, 14, 27);
+  const A4_W = 210;
+  const A4_H = 297;
+  const L = 15;
+  const R = 15;
+  const T = 15;
 
-    // Divider
-    doc.setDrawColor(180);
-    doc.line(10, 30, 200, 30);
+  /** ✅ Ensure new page if Y exceeds safe area */
+  const safeY = (y, increment = 10) => {
+    const pageHeight = A4_H;
+    if (y + increment > pageHeight - 15) {
+      doc.addPage();
+      // After new page, add header again for continuity
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.text("Continued...", L, 15);
+      return 25; // Reset Y near top margin for next content
+    }
+    return y;
+  };
 
-    // Group Title
+  /** ✅ Helper: Convert image to Base64 */
+  async function getBase64Logo() {
+    try {
+      const response = await fetch("/logo.png", { cache: "no-cache" });
+      if (!response.ok) throw new Error(`Logo fetch failed: ${response.status}`);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      return await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.error("❌ Logo fetch failed:", err);
+      return null;
+    }
+  }
+
+  /** ✅ Company header (logo + info + title + group name) */
+  const addPageHeader = async (groupName) => {
+    let cursorY = T;
+
+    const companyName = "MSG OILFIELD EQUIPMENT TRADING LLC";
+    const companyAddress = [
+      "Dubai Industrial City (DIC), Phase 1",
+      "Sai Shuaib 2, Warehouse No: J-04, Dubai, United Arab Emirates",
+      "TRN No: 100518964000003",
+    ];
+
+    const logoBase64 = await getBase64Logo();
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, "PNG", L, cursorY, 30, 15);
+      } catch (e) {
+        console.warn("⚠️ addImage failed:", e);
+      }
+    }
+
+    // Company info (centered)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text(`${groupName}`, 14, 38);
+    doc.text(companyName, A4_W / 2, cursorY + 5, { align: "center" });
 
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    companyAddress.forEach((line, i) => {
+      doc.text(line, A4_W / 2, cursorY + 10 + i * 5, { align: "center" });
+    });
+
+    cursorY += 28;
+
+    // Divider line
+    doc.setDrawColor(180);
+    doc.line(L - 5, cursorY, A4_W - R + 5, cursorY);
+    cursorY += 8;
+
+    // Document title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Packing List Summary", L, cursorY);
+    cursorY += 7;
+
+    // Order info
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Sales Order No: ${data.header?.salesOrderNo || "N/A"}`, L, cursorY);
+    cursorY += 5;
+    doc.text(`PO Number: ${data.header?.refNo || "N/A"}`, L, cursorY);
+    cursorY += 8;
+
+    // Group title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(`${groupName}`, L, cursorY);
+    cursorY += 5;
+
+    return cursorY;
   };
 
   // ======================
   // 📦 Loop through Groups
   // ======================
-  (data.groups || []).forEach((group, idx) => {
-    // New page for each group (except first)
+  for (let idx = 0; idx < (data.groups || []).length; idx++) {
+    const group = data.groups[idx];
+
     if (idx > 0) doc.addPage();
 
-    // Add header for this group
-    addPageHeader(group.name);
+    // ✅ Wait for header to complete and get dynamic start Y
+    let cursorY = await addPageHeader(group.name);
 
+    // Table rows
     const tableData = (group.items || []).map((it, i) => [
       i + 1,
-      it.description,
-      it.qty,
-      it.unit,
+      it.description || "",
+      it.qty || "",
+      it.unit || "",
     ]);
 
+    // ✅ Render items table
     autoTable(doc, {
       head: [["#", "Description", "Qty", "UOM"]],
       body: tableData,
-      startY: 45,
+      startY: cursorY,
+      margin: { left: L, right: R },
       theme: "grid",
       styles: { fontSize: 9, cellPadding: 2 },
       headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
@@ -57,22 +139,45 @@ const generatePDF = (data) => {
         2: { halign: "center", cellWidth: 20 },
         3: { halign: "center", cellWidth: 20 },
       },
-      didDrawPage: () => {
-        // optional watermark or footer can go here
-      },
     });
 
-    const finalY = doc.lastAutoTable.finalY + 10;
+    cursorY = doc.lastAutoTable.finalY + 8;
 
-    // ✅ Summary for the group
-    doc.setFontSize(10);
+    // ✅ Safe page break before group summary
+    cursorY = safeY(cursorY, 15);
+
+    // Group summary
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
     doc.text(
       `Net Weight: ${group.netWeight || 0} KGS    Gross Weight: ${group.grossWeight || 0} KGS`,
-      14,
-      finalY
+      L,
+      cursorY
     );
-  });
+
+    // Safe space before next group
+    cursorY = safeY(cursorY, 20);
+  }
+
+  // ======================
+  // 📄 Final Summary Page
+  // ======================
+  doc.addPage();
+  let cursorY = 25;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Overall Packing Summary", L, cursorY);
+  cursorY += 10;
+
+  const totalNet = data.groups?.reduce((sum, g) => sum + (parseFloat(g.netWeight) || 0), 0) || 0;
+  const totalGross = data.groups?.reduce((sum, g) => sum + (parseFloat(g.grossWeight) || 0), 0) || 0;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(`Total Net Weight: ${totalNet.toFixed(2)} KGS`, L, cursorY);
+  cursorY += 6;
+  doc.text(`Total Gross Weight: ${totalGross.toFixed(2)} KGS`, L, cursorY);
 
   // ✅ Save the PDF
   doc.save("Packing_List.pdf");
@@ -571,6 +676,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={activeGroup.length || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "length", e.target.value)
@@ -584,6 +690,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={activeGroup.width || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "width", e.target.value)
@@ -597,6 +704,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={activeGroup.height || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "height", e.target.value)
@@ -633,6 +741,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                 <input
                   type="number"
                   step="0.01"
+                  min={0}
                   value={activeGroup.boxWeight || ""}
                   onChange={(e) => {
                     const value = parseFloat(e.target.value) || 0;
@@ -663,6 +772,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                   <input
                     type="number"
                     step="0.01"
+                    min={0}
                     value={activeGroup.grossWeight ?? ""}
                     onChange={(e) =>
                       handleGrossWeightChange(activeGroup.id, e.target.value)
@@ -706,6 +816,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                           <input
                             type="number"
                             value={it.qty}
+                            min={0}
                             onChange={(e) => {
                               const requested = parseFloat(e.target.value) || 0;
                               const outsideRemaining = getRemainingForItem(it.id, activeGroup.id);
@@ -799,6 +910,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
             <input
               type="number"
               value={splitQty}
+              min={0}
               onChange={(e) => setSplitQty(e.target.value)}
               placeholder="Enter qty to assign"
               className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
@@ -905,6 +1017,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
             type="number"
             id="group-length"
             placeholder="L"
+            min={0}
             className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
             onChange={() => updateCBMInput()}
           />
@@ -915,6 +1028,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
             type="number"
             id="group-width"
             placeholder="W"
+            min={0}
             className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
             onChange={() => updateCBMInput()}
           />
@@ -925,6 +1039,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
             type="number"
             id="group-height"
             placeholder="H"
+            min={0}
             className="w-full border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500"
             onChange={() => updateCBMInput()}
           />
