@@ -1,0 +1,24 @@
+/* ===== Disable arrows in number inputs ===== */
+
+/* Chrome, Safari, Edge, Opera */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ===== Prevent scroll from changing focused number inputs ===== */
+input[type="number"]:focus {
+  wheel-event: none;
+}
+
+/* Optional: disable text selection on accidental scroll */
+input[type="number"] {
+  overscroll-behavior: contain;
+}
+

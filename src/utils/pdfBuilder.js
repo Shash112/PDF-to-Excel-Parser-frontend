@@ -176,20 +176,19 @@ function footerBlocks(doc, y, { packingDetails, shippingMarks }) {
   doc.setFont("helvetica", "bold");
   doc.text("PACKING DETAILS:", L, y);
   doc.setFont("helvetica", "normal");
-  doc.text(String(packingDetails || ""), L + 40, y);
+  const packWrapped = doc.splitTextToSize(String(packingDetails || ""), 160);
 
-  y += 8;
+  doc.text(packWrapped, L, y + 5);
+
+  y += 15;
   doc.setFont("helvetica", "bold");
   doc.text("SHIPPING MARKS:", L, y);
   doc.setFont("helvetica", "normal");
   // multi-line shipping marks
-  const marks = (shippingMarks || "").split("\n");
-  let yy = y;
-  marks.forEach((line, i) => {
-    if (i === 0) doc.text(String(line || ""), L + 40, yy);
-    else doc.text(String(line || ""), L + 40, (yy += 5));
-  });
-  return yy + 8;
+  const shippingMarksWrapped = doc.splitTextToSize(String(shippingMarks || ""), 160);
+
+  doc.text(shippingMarksWrapped, L, y + 5);
+  return y + 8;
 }
 
 /** ============================

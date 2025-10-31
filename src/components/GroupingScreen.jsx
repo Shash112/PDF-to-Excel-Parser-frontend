@@ -336,6 +336,56 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [groupWeights]);
 
+// 🚀 Enhanced sync: handle partial assignment + remove zero-qty items
+useEffect(() => {
+  if (!data.groups || data.groups.length === 0) return;
+
+  const itemMap = {};
+  (data.items || []).forEach((it) => (itemMap[it.id] = it));
+
+  // Track how much qty is left for each item while distributing across groups
+  const remainingQtyMap = {};
+  Object.values(itemMap).forEach((it) => {
+    remainingQtyMap[it.id] = parseFloat(it.qty) || 0;
+  });
+
+  const updatedGroups = data.groups.map((group) => {
+    const newItems = [];
+
+    (group.items || []).forEach((it) => {
+      const latest = itemMap[it.id];
+      if (!latest) return; // item deleted
+
+      const available = remainingQtyMap[it.id] ?? 0;
+      const desiredQty = parseFloat(it.qty) || 0;
+
+      // calculate how much we can still assign
+      const assignQty = Math.min(desiredQty, available);
+
+      // deduct assigned qty from remaining pool
+      remainingQtyMap[it.id] = Math.max(available - assignQty, 0);
+
+      // 🧹 Skip items that end up with zero qty
+      if (assignQty > 0) {
+        newItems.push({
+          ...latest,
+          qty: assignQty,
+        });
+      }
+    });
+
+    return { ...group, items: newItems };
+  });
+
+  // Only update when there's an actual change
+  const changed = JSON.stringify(updatedGroups) !== JSON.stringify(data.groups);
+  if (changed) onChange({ ...data, groups: updatedGroups });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [data.items]);
+
+
+
 
   // ✅ Update editable gross weight (cannot be less than net)
     const handleGrossWeightChange = (gid, value) => {
@@ -366,6 +416,8 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       setTimeout(() => inputRef.current.focus(), 100);
     }
   }, [showModal]);
+
+
 
   const renameGroup = (gid, name) => {
     const groups = (data.groups || []).map((g) =>

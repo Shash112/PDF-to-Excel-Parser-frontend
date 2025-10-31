@@ -12,6 +12,18 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false); // 🆕 modal state
   const [expanded, setExpanded] = useState(null);
 
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (document.activeElement.type === "number") {
+        e.preventDefault();       // stop scroll action
+        document.activeElement.blur(); // remove focus
+      }
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
+  }, []);
+
 
   useEffect(() => {
     if (!data?.items || !data?.groups) return;
