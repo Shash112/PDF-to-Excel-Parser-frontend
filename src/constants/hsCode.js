@@ -69,3 +69,15 @@ export const hsCodeCountryMap = {
   "73181500": ["India", "China", "South Korea", "UAE", "Other"],
   "84818040": ["India", "China", "Italy", "Spain", "Germany", "Other"],
 };
+
+export const hsCodeLabels = {
+  "73079100": "CS FLANGES",
+  "73079900": "CS FITTINGS / SPECTACLE BLIND",
+  "73041900": "CS PIPE",
+  "73072100": "SS FLANGES",
+  "73072900": "SS FITTINGS",
+  "73044100": "SS PIPE",
+  "84841000": "GASKET",
+  "73181500": "STUD BOLT",
+  "84818040": "VALVE",
+};

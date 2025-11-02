@@ -3,7 +3,7 @@ import PdfUploadScreen from "./components/PdfUploadScreen";
 import ItemsEditor from "./components/ItemsEditor";
 import GroupingScreen from "./components/GroupingScreen";
 import PreviewTabs from "./components/PreviewTab";
-import { hsCodeCountryMap } from "./constants/hsCode";
+import { hsCodeCountryMap, hsCodeLabels } from "./constants/hsCode";
 
 
 export default function App() {
@@ -158,35 +158,83 @@ export default function App() {
             </h2>
 
             <div className="divide-y divide-gray-200">
-              {Object.entries(hsCodeCountryMap).map(([code, countries], idx) => (
-                <div key={code}>
-                  {/* Header */}
-                  <button
-                    onClick={() => setExpanded(expanded === idx ? null : idx)}
-                    className="w-full flex justify-between items-center py-3 text-left"
-                  >
-                    <span className="font-semibold text-blue-700">{code}</span>
-                    <span
-                      className={`transform transition-transform ${
-                        expanded === idx ? "rotate-180" : "rotate-0"
-                      } text-gray-500`}
-                    >
-                      ▼
-                    </span>
-                  </button>
+              {Object.entries(hsCodeCountryMap).map(([code, countries], idx) => {
+                const label = hsCodeLabels[code] || "Unknown";
 
-                  {/* Collapsible Content */}
-                  {expanded === idx && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-md p-3 mb-2 text-sm text-gray-700">
-                      <ul className="list-disc pl-5 space-y-1">
-                        {countries.map((country, i) => (
-                          <li key={i}>{country}</li>
-                        ))}
-                      </ul>
+                return (
+                  <div key={code} className="border-b border-gray-200">
+                    {/* Header */}
+                    <div
+                      className="flex justify-between items-center py-3 cursor-pointer select-none"
+                      onClick={() => setExpanded(expanded === idx ? null : idx)}
+                    >
+                      {/* Left side — code and label */}
+                      <div className="flex flex-col flex-1">
+                        <span className="font-semibold text-blue-700">{code}</span>
+                        <span className="text-xs text-gray-600">{label}</span>
+                      </div>
+
+                      {/* 📋 Copy HS Code — stop event so it won’t toggle expand */}
+                      <button
+                        title="Copy HS Code"
+                        onClick={(e) => {
+                          e.stopPropagation(); // prevent toggle when copying
+                          navigator.clipboard.writeText(code);
+                          const el = document.createElement("div");
+                          el.textContent = "Copied!";
+                          el.className =
+                            "absolute text-xs text-green-600 bg-white px-2 py-1 border border-green-400 rounded shadow-sm";
+                          document.body.appendChild(el);
+                          setTimeout(() => el.remove(), 1000);
+                        }}
+                        className="ml-2 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md border border-gray-300 cursor-pointer"
+                      >
+                        📋
+                      </button>
+
+                      {/* ▼ Arrow — now clickable */}
+                      <span
+                        className={`ml-3 transform transition-transform ${
+                          expanded === idx ? "rotate-180" : "rotate-0"
+                        } text-gray-500`}
+                      >
+                        ▼
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* Collapsible Content */}
+                    {expanded === idx && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-md p-3 mb-2 text-sm text-gray-700">
+                        <ul className="list-disc pl-5 space-y-1">
+                          {countries.map((country, i) => (
+                            <li key={i} className="flex justify-between items-center">
+                              <span>{country}</span>
+
+                              {/* 📋 Copy Country */}
+                              <button
+                                title="Copy Country"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(country);
+                                  const el = document.createElement("div");
+                                  el.textContent = "Copied!";
+                                  el.className =
+                                    "absolute text-xs text-green-600 bg-white px-2 py-1 border border-green-400 rounded shadow-sm";
+                                  document.body.appendChild(el);
+                                  setTimeout(() => el.remove(), 1000);
+                                }}
+                                className="ml-2 px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md border border-gray-300 cursor-pointer"
+                              >
+                                📋
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="mt-5 text-right">
@@ -200,6 +248,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+
 
     </div>
   );

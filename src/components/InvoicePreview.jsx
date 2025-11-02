@@ -2,8 +2,8 @@ import React, { useState, useMemo } from "react";
 import CommonHeader from "./CommanHeader";
 
 export default function InvoicePreview({ data }) {
-  const { header = {}, items = [], totals = {} } = data;
-  const [priceText] = useState(totals?.totalInWords || "AED Zero Only");
+  const { header = {}, items = [], totals = {}, totalCbm } = data;
+  const [priceText] = useState(totals?.subTotalInWords || "AED Zero Only");
 
   // ✅ Calculate total quantity of all items
   const totalQty = useMemo(() => {
@@ -81,8 +81,8 @@ export default function InvoicePreview({ data }) {
           <tbody>
             {/* TOTAL VALUE IN AED */}
             <tr className="bg-gray-100 font-semibold">
-              <td className="border border-gray-400 px-3 py-2 text-right" colSpan={6}>
-                TOTAL VALUE IN AED.
+              <td className="border border-gray-400 px-3 py-2 text-right" colSpan={4}>
+                TOTAL VALUE IN QTY:
               </td>
               <td className="border border-gray-400 px-3 py-2 text-center w-20">
                 {totalQty.toFixed(2)}
@@ -90,8 +90,8 @@ export default function InvoicePreview({ data }) {
               <td className="border border-gray-400 px-3 py-2 text-center w-20">
                 Nos
               </td>
-              <td className="border border-gray-400 px-3 py-2 text-center w-20">
-                AED
+              <td className="border border-gray-400 px-3 py-2 text-center w-20 " colSpan={3} >
+                TOTAL VALUE IN AED:
               </td>
               <td className="border border-gray-400 px-3 py-2 text-right font-bold">
                 {totals?.subTotal || "0.00"}
@@ -114,6 +114,9 @@ export default function InvoicePreview({ data }) {
                 <strong>PACKING DETAILS:</strong>{" "}
                 
                 {header.packingDetails || ""}
+                <br />
+                <strong>TOTAL CBM (m³):</strong> {" "}
+                {totalCbm?.toFixed(2) || "0.00"}
               </td>
 
               <td

@@ -2,11 +2,7 @@ import React, { useMemo, useEffect } from "react";
 import CommonHeader from "./CommanHeader";
 
 export default function PackingListPreview({ data, onChange }) {
-  const { header = {}, groups = [], items = [] } = data;
-
-  // ✅ Capitalize helper
-  const capitalizeName = (name = "") =>
-    name.charAt(0).toUpperCase() + name.slice(1);
+  const { header = {}, groups = [], items = [], totalCbm } = data;
 
   // ✅ Inline row total weight helper (lightweight, no group calc)
   const getRowTotal = (qty, unitWeight) => {
@@ -49,29 +45,41 @@ export default function PackingListPreview({ data, onChange }) {
     };
   }, [groups]);
 
+
   // ✅ Auto-packing summary
   const autoPackingSummary = useMemo(() => {
     if (!(groups || []).length) return "";
 
     const normalizeName = (name = "") => {
       name = name.trim().toLowerCase();
-      name = name.replace(/[\s_-]*\d+$/g, "");
-      name = name.replace(/\s+\([^)]*\)$/g, "");
-      name = name.replace(/\s{2,}/g, " ");
+      name = name.replace(/[\s_-]*\d+$/g, ""); // remove trailing numbers
+      name = name.replace(/\s+\([^)]*\)$/g, ""); // remove text inside parentheses
+      name = name.replace(/\s{2,}/g, " "); // collapse extra spaces
       return name;
     };
 
+    const capitalizeName = (name = "") =>
+      name
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
     const countMap = new Map();
     (groups || []).forEach((g) => {
-      const rawName = g.name?.trim() || "unknown";
+      const rawName = g.name?.trim() || "Unknown";
       const key = normalizeName(rawName);
       countMap.set(key, (countMap.get(key) || 0) + 1);
     });
 
-    return Array.from(countMap.entries())
+    const totalPackages = Array.from(countMap.values()).reduce((sum, c) => sum + c, 0);
+
+    const details = Array.from(countMap.entries())
       .map(([name, count]) => `${count} ${capitalizeName(name)}`)
-      .join(", ");
+      .join(" + ");
+
+    return `Total Packages: ${totalPackages} (${details})`;
   }, [groups]);
+
 
   useEffect(() => {
     if (autoPackingSummary) {
@@ -264,6 +272,9 @@ export default function PackingListPreview({ data, onChange }) {
         <strong className="block mt-4">SHIPPING MARKS:</strong>
         <p>{header.buyer || ""}</p>
         <p>{header.buyerAddress || ""}</p>
+        <br />
+        <strong>TOTAL CBM (m³):</strong> {" "}
+        {totalCbm?.toFixed(2) || "0.00"}
       </div>
 
       {/* ✅ Totals */}

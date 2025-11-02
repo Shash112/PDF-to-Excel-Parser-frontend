@@ -10,12 +10,18 @@ export default function ItemsEditor({ data, onChange, onNext }) {
     items: {},
   });
   const [isFormValid, setIsFormValid] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+
 
   useEffect(() => {
     validateForm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
+  const formatToFixed = (value, decimals = 2) => {
+    if (value === "" || value === null || isNaN(value)) return "";
+    return parseFloat(value).toFixed(decimals);
+  };
 
   const validateForm = () => {
     const headerFields = [
@@ -64,38 +70,41 @@ export default function ItemsEditor({ data, onChange, onNext }) {
     return !hasError;
   };
 
-  const handleDeleteItem = (itemToDelete) => {
-    const message = itemToDelete.splitGroupId
-      ? "You are about to delete a split item."
-      : "You are about to delete this item.";
-
-    const userInput = prompt(
-      `${message}\n\nType "confirm" to proceed with deletion:`
+  const toggleSelectItem = (id) => {
+    setSelectedItems((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
 
-    if (!userInput || userInput.toLowerCase().trim() !== "confirm") {
-      alert("❌ Deletion cancelled. Item was not deleted.");
+  const toggleSelectAll = () => {
+    if (selectedItems.length === data.items.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(data.items.map((it) => it.id));
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedItems.length === 0) {
+      alert("❌ No items selected for deletion.");
       return;
     }
 
-    let updatedItems = data.items.filter((it) => it.id !== itemToDelete.id);
+    const userInput = prompt(
+      `You are about to delete ${selectedItems.length} item(s).\n\nType "confirm" to proceed:`
+    );
 
-    // ✅ Optional: Reorder split IDs if needed
-    if (itemToDelete.splitGroupId) {
-      const groupId = itemToDelete.splitGroupId;
-      const groupItems = updatedItems.filter((it) => it.splitGroupId === groupId);
-
-      // Reassign sequential IDs (e.g., 1001-1, 1001-2, 1001-3 → after delete becomes 1001-1, 1001-2)
-      groupItems.forEach((it, idx) => {
-        it.id = `${groupId}-${idx + 1}`;
-      });
+    if (!userInput || userInput.toLowerCase().trim() !== "confirm") {
+      alert("❌ Deletion cancelled.");
+      return;
     }
 
+    const updatedItems = data.items.filter((it) => !selectedItems.includes(it.id));
+
+    setSelectedItems([]);
     onChange({ ...data, items: updatedItems });
-
-    alert("✅ Item deleted successfully.");
+    alert(`✅ Deleted ${selectedItems.length} item(s) successfully.`);
   };
-
 
 
   const openSplitModal = (item, index) => {
@@ -215,12 +224,18 @@ export default function ItemsEditor({ data, onChange, onNext }) {
       }
 
       // 🔹 Auto-calculate totalWeight
-      if (["qty", "unitWeight"].includes(field)) {
+      if (["qty", "unitWeight", "rate"].includes(field)) {
+        const num = parseFloat(value);
+        updatedItem[field] = isNaN(num) ? "" : formatToFixed(num); // ✅ always keep 2 decimals
+
         const qty = parseFloat(updatedItem.qty || 0);
         const unitWeight = parseFloat(updatedItem.unitWeight || 0);
+
+        // Auto-calculate totalWeight (formatted)
         updatedItem.totalWeight =
-          qty && unitWeight ? Number((qty * unitWeight).toFixed(2)) : "";
+          qty && unitWeight ? parseFloat((qty * unitWeight).toFixed(2)) : "";
       }
+
 
       return updatedItem;
     });
@@ -269,7 +284,15 @@ export default function ItemsEditor({ data, onChange, onNext }) {
           <span className="text-blue-600">📦</span> Step 1 — Items Editor
         </h1>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
+          {selectedItems.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              className="px-4 py-2 rounded-lg shadow text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition-all"
+            >
+              🗑️ Delete Selected ({selectedItems.length})
+            </button>
+          )}
           <button
             onClick={() => {
               if (validateForm()) {
@@ -286,6 +309,8 @@ export default function ItemsEditor({ data, onChange, onNext }) {
             💾 Save & Next
           </button>
         </div>
+
+
       </div>
       <>
         {/* Company Header */}
@@ -469,190 +494,197 @@ export default function ItemsEditor({ data, onChange, onNext }) {
 
       {/* Main Table Section */}
       <div className="w-full max-w-7xl bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto max-h-[75vh]">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 shadow-sm">
-              <tr className="text-center uppercase text-xs tracking-wide">
-                <th className="px-4 py-3 border-b border-gray-300 w-20">ID</th>
-                <th className="px-4 py-3 border-b border-gray-300 w-40">Item Code</th>
-                <th className="px-4 py-3 border-b border-gray-300 text-left">
-                  Description
-                </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-28">Qty</th>
-                <th className="px-4 py-3 border-b border-gray-300 w-24">UOM</th>
-                <th className="px-4 py-3 border-b border-gray-300 w-28">
-                  HS Code
-                </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-28">
-                  Origin
-                </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-28">
-                  Unit Weight (kg)
-                </th>
-                <th className="px-4 py-3 border-b border-gray-300 w-20">Action</th>
-                {/* <th className="px-4 py-3 border-b border-gray-300 w-28">
-                  Total Weight (kg)
-                </th> */}
-              </tr>
-            </thead>
-
-            <tbody>
-              {data.items.length > 0 ? (
-                data.items.map((it, i) => (
-                  <tr
-                    key={it.id}
-                    className={`${
-                      i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    } hover:bg-blue-50 transition-colors duration-150`}
-                  >
-                    <td className="border-t border-gray-200 px-4 py-2 text-center text-gray-600 font-medium">
-                      {it.id}
-                    </td>
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
+        <div className="relative overflow-auto max-h-[75vh]">
+          <div  className="min-w-max">
+            <table className="w-full border-collapse text-sm min-w-6xl">
+              <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 shadow-sm">
+                <tr className="text-center uppercase text-xs tracking-wide">
+                  <th className="px-2 py-3 border-b border-gray-300 w-10">
                     <input
-                      type="text"
-                      value={it.itemCode || ""}
-                      onChange={(e) => handleItemChange(i, "itemCode", e.target.value)}
-                      placeholder="Enter Item Code"
-                      className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.itemCode ? "border-red-500" : "border-gray-300"}`}
+                      type="checkbox"
+                      checked={selectedItems.length === data.items.length && data.items.length > 0}
+                      onChange={toggleSelectAll}
                     />
-                  </td>
-                    <td className="border-t border-gray-200 px-4 py-2">
-                      <textarea
-                        rows={2}
-                        value={it.description || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "description", e.target.value)
-                        }
-                        placeholder="Enter item description..."
-                        className={`w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all resize-none ${validationErrors.items[i]?.description ? "border-red-500" : "border-gray-300"}`}
+                  </th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-20">ID</th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-40">Item Code</th>
+                  <th className="px-4 py-3 border-b border-gray-300 text-left w-60">
+                    Description
+                  </th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-30">Qty</th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-24">UOM</th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-30">
+                    HS Code
+                  </th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-30">
+                    Origin
+                  </th>
+                  <th className="px-4 py-3 border-b border-gray-300 w-30">
+                    Unit Weight (kg)
+                  </th>
+                  {/* <th className="px-4 py-3 border-b border-gray-300 w-28">
+                    Total Weight (kg)
+                  </th> */}
+                </tr>
+              </thead>
+
+              <tbody>
+                {data.items.length > 0 ? (
+                  data.items.map((it, i) => (
+                    <tr
+                      key={it.id}
+                      className={`${
+                        i % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      } hover:bg-blue-50 transition-colors duration-150`}
+                    >
+                      <td className="border-t border-gray-200 px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.includes(it.id)}
+                          onChange={() => toggleSelectItem(it.id)}
+                        />
+                      </td>
+                      <td className="border-t border-gray-200 px-4 py-2 text-center text-gray-600 font-medium">
+                        {it.id}
+                      </td>
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
+                      <input
+                        type="text"
+                        value={it.itemCode || ""}
+                        onChange={(e) => handleItemChange(i, "itemCode", e.target.value)}
+                        placeholder="Enter Item Code"
+                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.itemCode ? "border-red-500" : "border-gray-300"}`}
                       />
                     </td>
+                      <td className="border-t border-gray-200 px-4 py-2">
+                        <textarea
+                          rows={2}
+                          value={it.description || ""}
+                          onChange={(e) =>
+                            handleItemChange(i, "description", e.target.value)
+                          }
+                          placeholder="Enter item description..."
+                          className={`w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition-all resize-none ${validationErrors.items[i]?.description ? "border-red-500" : "border-gray-300"}`}
+                        />
+                      </td>
 
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={it.qty || ""}
+                            onChange={(e) => handleItemChange(i, "qty", e.target.value)}
+                            onBlur={(e) => {
+                              if (e.target.value !== "")
+                                handleItemChange(i, "qty", formatToFixed(e.target.value));
+                            }}
+                            placeholder="0.00"
+                            className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.qty ? "border-red-500" : "border-gray-300"}`}
+                          />
+                          {parseFloat(it.qty) > 1 && (
+                            <button
+                              onClick={() => openSplitModal(it, i)}
+                              className="text-xs text-blue-600 underline hover:text-blue-800"
+                            >
+                              Split
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
+                        <input
+                          type="text"
+                          value={it.unit || ""}
+                          onChange={(e) =>
+                            handleItemChange(i, "unit", e.target.value)
+                          }
+                          placeholder="PCS / SET"
+                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unit ? "border-red-500" : "border-gray-300"}`}
+                        />
+                      </td>
+
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
+                        <input
+                          type="text"
+                          value={it.hsCode || ""}
+                          onChange={(e) =>
+                            handleItemChange(i, "hsCode", e.target.value)
+                          }
+                          placeholder="HS Code"
+                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.hsCode ? "border-red-500" : "border-gray-300"}`}
+                        />
+                      </td>
+
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
+                        {it.originCountries && it.originCountries.length > 0 ? (
+                          <>
+                            <select
+                              value={it.origin || ""}
+                              onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                              className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
+                            >
+                              <option value="">Select Country</option>
+                              {it.originCountries.map((country) => (
+                                <option key={country} value={country}>
+                                  {country}
+                                </option>
+                              ))}
+                            </select>
+
+                            {it.origin === "Other" && (
+                              <input
+                                type="text"
+                                value={it.customOrigin || ""}
+                                onChange={(e) =>
+                                  handleItemChange(i, "customOrigin", e.target.value)
+                                }
+                                placeholder="Enter custom country"
+                                className={`mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <input
+                            type="text"
+                            value={it.origin || ""}
+                            onChange={(e) => handleItemChange(i, "origin", e.target.value)}
+                            placeholder="Country"
+                            className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.origin ? "border-red-500" : "border-gray-300"}`}
+                          />
+                        )}
+                      </td>
+
+                      <td className="border-t border-gray-200 px-4 py-2 text-center">
                         <input
                           type="number"
                           min="0"
-                          value={it.qty || ""}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            if (isNaN(value) || value < 0) return; // prevent negative or invalid input
-                            handleItemChange(i, "qty", value);
-                          }}
-                          placeholder="0"
-                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.qty ? "border-red-500" : "border-gray-300"}`}
+                          value={it.unitWeight || ""}
+                          onChange={(e) => handleItemChange(i, "unitWeight", e.target.value)}
+                            onBlur={(e) => {
+                              if (e.target.value !== "")
+                                handleItemChange(i, "unitWeight", formatToFixed(e.target.value));
+                            }}
+                            placeholder="0.00"
+                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unitWeight ? "border-red-500" : "border-gray-300"}`}
                         />
-                        {parseFloat(it.qty) > 1 && (
-                          <button
-                            onClick={() => openSplitModal(it, i)}
-                            className="text-xs text-blue-600 underline hover:text-blue-800"
-                          >
-                            Split
-                          </button>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <input
-                        type="text"
-                        value={it.unit || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "unit", e.target.value)
-                        }
-                        placeholder="PCS / SET"
-                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unit ? "border-red-500" : "border-gray-300"}`}
-                      />
-                    </td>
-
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <input
-                        type="text"
-                        value={it.hsCode || ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "hsCode", e.target.value)
-                        }
-                        placeholder="HS Code"
-                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.hsCode ? "border-red-500" : "border-gray-300"}`}
-                      />
-                    </td>
-
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      {it.originCountries && it.originCountries.length > 0 ? (
-                        <>
-                          <select
-                            value={it.origin || ""}
-                            onChange={(e) => handleItemChange(i, "origin", e.target.value)}
-                            className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
-                          >
-                            <option value="">Select Country</option>
-                            {it.originCountries.map((country) => (
-                              <option key={country} value={country}>
-                                {country}
-                              </option>
-                            ))}
-                          </select>
-
-                          {it.origin === "Other" && (
-                            <input
-                              type="text"
-                              value={it.customOrigin || ""}
-                              onChange={(e) =>
-                                handleItemChange(i, "customOrigin", e.target.value)
-                              }
-                              placeholder="Enter custom country"
-                              className={`mt-2 w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.customOrigin ? "border-red-500" : "border-gray-300"}`}
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <input
-                          type="text"
-                          value={it.origin || ""}
-                          onChange={(e) => handleItemChange(i, "origin", e.target.value)}
-                          placeholder="Country"
-                          className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.origin ? "border-red-500" : "border-gray-300"}`}
-                        />
-                      )}
-                    </td>
-
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        value={it.unitWeight || ""}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value);
-                          if (isNaN(value) || value < 0) return; // prevent negative or invalid input
-                          handleItemChange(i, "unitWeight", value);
-                        }}
-                        placeholder="0.00"
-                        className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unitWeight ? "border-red-500" : "border-gray-300"}`}
-                      />
-                    </td>
-                    <td className="border-t border-gray-200 px-4 py-2 text-center">
-                      <button
-                        onClick={() => handleDeleteItem(it)}
-                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
-                      >
-                        🗑️ Delete
-                      </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="text-center py-10 text-gray-500 italic bg-gray-50"
+                    >
+                      No items found. Please upload or add data to continue.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="text-center py-10 text-gray-500 italic bg-gray-50"
-                  >
-                    No items found. Please upload or add data to continue.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         

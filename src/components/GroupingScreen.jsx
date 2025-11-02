@@ -541,11 +541,20 @@ useEffect(() => {
       const W = parseFloat(updatedGroup.width) || 0;
       const H = parseFloat(updatedGroup.height) || 0;
 
-      updatedGroup.cbm = parseFloat(((L * W * H) / 1000000).toFixed(3)); // ✅ in cubic meters
+      updatedGroup.cbm = parseFloat(((L * W * H) / 1000000).toFixed(2)); // ✅ cubic meters
       return updatedGroup;
     });
 
-    onChange({ ...data, groups });
+    // ✅ Calculate total CBM across all groups
+    const totalCbm = groups.reduce((sum, g) => sum + (parseFloat(g.cbm) || 0), 0);
+    console.log(totalCbm);
+
+    // ✅ Update parent data with groups and totalCbm
+    onChange({ 
+      ...data, 
+      groups, 
+      totalCbm: parseFloat(totalCbm.toFixed(2)) 
+    });
   };
 
   // ==============================
@@ -576,7 +585,33 @@ useEffect(() => {
             ◀ Back
           </button>
           <button
-            onClick={allGrouped ? onNext : undefined}
+            onClick={() => {
+              if (!allGrouped) return;
+
+              // ✅ Validation for each group before saving
+              const invalidGroups = (data.groups || []).filter((g) => {
+                return (
+                  !g.name?.trim() ||
+                  !g.length || g.length <= 0 ||
+                  !g.width || g.width <= 0 ||
+                  !g.height || g.height <= 0 ||
+                  !g.boxWeight || g.boxWeight <= 0
+                );
+              });
+
+              if (invalidGroups.length > 0) {
+                const firstInvalid = invalidGroups[0];
+                alert(
+                  `❌ Please fill all required fields for group "${firstInvalid.name || "(Unnamed)"}".\n\n` +
+                  `Required fields:\n- Group Name\n- Length (cm)\n- Width (cm)\n- Height (cm)\n- Package Weight (KGS)`
+                );
+                setActiveTab(firstInvalid.id); // jump user to that tab
+                return;
+              }
+
+              // ✅ If all groups are valid
+              onNext();
+            }}
             disabled={!allGrouped}
             className={`px-5 py-2.5 rounded-lg ${
               allGrouped
@@ -705,10 +740,11 @@ useEffect(() => {
               {/* Group Info */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Group name:</span>
+                  <span className="text-sm text-gray-500">Group name* :</span>
                   <input
                     value={activeGroup.name}
                     onChange={(e) => renameGroup(activeGroup.id, e.target.value)}
+                    required
                     className="font-semibold border border-gray-300 rounded-md px-3 py-1.5 focus:ring-1 focus:ring-blue-400"
                   />
                 </div>
@@ -724,11 +760,12 @@ useEffect(() => {
               <div className="flex flex-wrap items-end gap-4 mb-4">
                 <div>
                   <label className="block text-xs text-gray-600">
-                    Length (cm)
+                    Length (cm)*
                   </label>
                   <input
                     type="number"
                     min={0}
+                    required
                     value={activeGroup.length || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "length", e.target.value)
@@ -738,11 +775,12 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-600">
-                    Width (cm)
+                    Width (cm)*
                   </label>
                   <input
                     type="number"
                     min={0}
+                    required
                     value={activeGroup.width || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "width", e.target.value)
@@ -752,11 +790,12 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-600">
-                    Height (cm)
+                    Height (cm)*
                   </label>
                   <input
                     type="number"
                     min={0}
+                    required
                     value={activeGroup.height || ""}
                     onChange={(e) =>
                       handleDimensionChange(activeGroup.id, "height", e.target.value)
@@ -766,10 +805,11 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-600">
-                    CBM (m³)
+                    CBM (m³)*
                   </label>
                   <input
                     type="text"
+                    required
                     value={activeGroup.cbm || 0}
                     readOnly
                     className="w-28 border border-gray-300 bg-gray-100 rounded px-2 py-1 text-right font-semibold"
@@ -781,7 +821,7 @@ useEffect(() => {
               <div className="flex items-center gap-3 mb-4">
                 <label className="text-sm text-gray-700 font-medium">
                   {(() => {
-                    if (activeGroup?.type) return `${activeGroup.type} Weight (KGS)`;
+                    if (activeGroup?.type) return `${activeGroup.type} Weight (KGS)*`;
                     const clean = (activeGroup?.name || "")
                       .replace(/\d+/g, "")
                       .trim()
@@ -794,6 +834,7 @@ useEffect(() => {
                   type="number"
                   step="0.01"
                   min={0}
+                  required
                   value={activeGroup.boxWeight || ""}
                   onChange={(e) => {
                     const value = parseFloat(e.target.value) || 0;
@@ -906,6 +947,18 @@ useEffect(() => {
                         </td>
                         <td className="border-t px-2 py-2 text-center">
                           {it.unitWeight || ""}
+                          {(() => {
+                            const qty = parseFloat(it.qty) || 0;
+                            const unitWt = parseFloat(it.unitWeight) || 0;
+                            const itemTotalWt = qty * unitWt;
+                            const groupNet = parseFloat(activeGroup.netWeight) || 0;
+                            const percentage =
+                              groupNet > 0 ? ((itemTotalWt / groupNet) * 100).toFixed(1) : null;
+
+                            return percentage ? (
+                              <span className="text-xs text-gray-500 ml-1">({percentage}%)</span>
+                            ) : null;
+                          })()}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
                           <button

@@ -169,7 +169,7 @@ function groupTotalsBlock(doc, y, { net, gross }) {
   return y + 10;
 }
 
-function footerBlocks(doc, y, { packingDetails, shippingMarks }) {
+function footerBlocks(doc, y, { packingDetails, shippingMarks,totalCbm =0.00 }) {
   y = safeY(doc, y, 20); // ✅ Add here
   //const pageW = A4_W - L - R;
   doc.setFontSize(10);
@@ -179,8 +179,12 @@ function footerBlocks(doc, y, { packingDetails, shippingMarks }) {
   const packWrapped = doc.splitTextToSize(String(packingDetails || ""), 160);
 
   doc.text(packWrapped, L, y + 5);
-
   y += 15;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`TOTAL CBM (m³): ${totalCbm}`, L, y);
+
+  y += 10;
   doc.setFont("helvetica", "bold");
   doc.text("SHIPPING MARKS:", L, y);
   doc.setFont("helvetica", "normal");
@@ -196,7 +200,7 @@ function footerBlocks(doc, y, { packingDetails, shippingMarks }) {
  *  Mirrors your PackingListPreview structure
  * ============================ */
 export async function buildPackingListPDF(data) {
-  const { header = {}, groups = [], items = [] } = data;
+  const { header = {}, groups = [], items = [], totalCbm } = data;
   // unique HS codes (same logic)
   const hsSet = new Set();
   items.forEach(it => it.hsCode && hsSet.add(it.hsCode));
@@ -314,7 +318,8 @@ export async function buildPackingListPDF(data) {
   // Footer blocks
   cursorY = footerBlocks(doc, cursorY, {
     packingDetails: header.packingDetails,
-    shippingMarks: [header.buyer, header.buyerAddress].filter(Boolean).join("\n")
+    shippingMarks: [header.buyer, header.buyerAddress].filter(Boolean).join("\n"),
+    totalCbm
   });
 
   return doc;
@@ -325,7 +330,7 @@ export async function buildPackingListPDF(data) {
  *  Mirrors your InvoicePreview structure
  * ============================ */
 export async function buildInvoicePDF(data) {
-  const { header = {}, items = [], totals = {} } = data;
+  const { header = {}, items = [], totals = {}, totalCbm } = data;
 
   // unique HS codes (same logic)
   const hsSet = new Set();
@@ -389,10 +394,10 @@ export async function buildInvoicePDF(data) {
     styles: { font: "helvetica", fontSize: 9, cellPadding: 1.6, lineWidth: 0.2 },
     head: [],
     body: [[
-      { content: "TOTAL VALUE IN AED.", styles: { halign: "right", fillColor: [240,240,240], fontStyle: "bold" } },
+      { content: "TOTAL VALUE IN QTY:", styles: { halign: "right", fillColor: [240,240,240], fontStyle: "bold" } },
       { content: totalQty.toFixed(2), styles: { halign: "center", fillColor: [240,240,240], fontStyle: "bold" } },
       { content: "Nos", styles: { halign: "center", fillColor: [240,240,240], fontStyle: "bold" } },
-      { content: "AED", styles: { halign: "center", fillColor: [240,240,240], fontStyle: "bold" } },
+      { content: "TOTAL VALUE IN AED:", styles: { halign: "center", fillColor: [240,240,240], fontStyle: "bold" } },
       { content: String(totals?.subTotal || "0.00"), styles: { halign: "right", fillColor: [240,240,240], fontStyle: "bold" } },
     ]],
     columns: [
@@ -403,10 +408,10 @@ export async function buildInvoicePDF(data) {
       { header: "", dataKey: "amt" },
     ],
     columnStyles: {
-      0: { cellWidth: 72 },
+      0: { cellWidth: 51 },
       1: { cellWidth: 25 },
       2: { cellWidth: 25 },
-      3: { cellWidth: 25 },
+      3: { cellWidth: 46 },
       4: { cellWidth: 35 },
     }
   });
@@ -418,7 +423,7 @@ export async function buildInvoicePDF(data) {
   doc.setFont("helvetica", "bold");
   doc.text("IN WORDS :", L, cursorY + 5);
   doc.setFont("helvetica", "normal");
-  doc.text(String(totals?.totalInWords || totals?.amountInWords || ""), L + 25, cursorY + 5);
+  doc.text(String(totals?.subTotalInWords || ""), L + 25, cursorY + 5);
   cursorY += 12;
   cursorY = safeY(doc, cursorY, 25); 
 
@@ -437,6 +442,11 @@ export async function buildInvoicePDF(data) {
   // PACKING DETAILS
   cursorY = writeFieldStacked("PACKING DETAILS", header?.packingDetails, L, cursorY);
     cursorY += 12;
+  cursorY = safeY(doc, cursorY, 15);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`TOTAL CBM (m³): ${totalCbm}`, L, cursorY);
+      cursorY += 12;
   cursorY = safeY(doc, cursorY, 15);
 
   // SHIPPING MARKS
