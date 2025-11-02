@@ -46,14 +46,13 @@ export default function PackingListPreview({ data, onChange }) {
   }, [groups]);
 
 
-  // ✅ Auto-packing summary
   const autoPackingSummary = useMemo(() => {
-    if (!(groups || []).length) return "";
+    if (!(groups || []).length) return null;
 
     const normalizeName = (name = "") => {
       name = name.trim().toLowerCase();
       name = name.replace(/[\s_-]*\d+$/g, ""); // remove trailing numbers
-      name = name.replace(/\s+\([^)]*\)$/g, ""); // remove text inside parentheses
+      name = name.replace(/\s+\([^)]*\)$/g, ""); // remove parentheses content
       name = name.replace(/\s{2,}/g, " "); // collapse extra spaces
       return name;
     };
@@ -72,13 +71,16 @@ export default function PackingListPreview({ data, onChange }) {
     });
 
     const totalPackages = Array.from(countMap.values()).reduce((sum, c) => sum + c, 0);
-
     const details = Array.from(countMap.entries())
       .map(([name, count]) => `${count} ${capitalizeName(name)}`)
       .join(" + ");
 
-    return `Total Packages: ${totalPackages} (${details})`;
+    return {
+      summary: `Total Packages: ${totalPackages} (${details})`,
+      totalPackages,
+    };
   }, [groups]);
+
 
 
   useEffect(() => {
@@ -87,11 +89,13 @@ export default function PackingListPreview({ data, onChange }) {
         ...data,
         header: {
           ...header,
-          packingDetails: autoPackingSummary,
+          packingDetails: autoPackingSummary?.summary,
+          totalPackages: autoPackingSummary?.totalPackages,
         },
       });
     }
   }, [autoPackingSummary]);
+
 
   const showGroups = (groups || []).length > 0;
 
@@ -268,7 +272,7 @@ export default function PackingListPreview({ data, onChange }) {
       {/* ✅ Packing Details */}
       <div className="mt-4 border-t border-gray-300 pt-3 text-sm">
         <strong>PACKING DETAILS:</strong>
-        <p>{header.packingDetails || autoPackingSummary}</p>
+        <p>{header.packingDetails || autoPackingSummary?.summary}</p>
         <strong className="block mt-4">SHIPPING MARKS:</strong>
         <p>{header.buyer || ""}</p>
         <p>{header.buyerAddress || ""}</p>

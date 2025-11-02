@@ -160,73 +160,115 @@ try {
     wsINV["!cols"] = wsPL["!cols"];
     XLSX.utils.book_append_sheet(wb, wsINV, "Invoice");
 
-    // ✅ Build HS CODE Sheet (New)
-const hs_data = [
-  ["H. S. CODE", "DESCRIPTION", "COUNTRY OF ORIGIN", "PACKAGE", "", "", "NET WEIGHT / KGS", "GROSS WEIGHT / KGS", "CURRENCY", ""],
-  ["", "", "", "QTY", "TYPE", "PACKAGES", "TYPE", "VALUE"],
-];
+    const hs_data = [
+      ["H. S. CODE", "DESCRIPTION", "COUNTRY OF ORIGIN", "PACKAGE", "", "", "NET WEIGHT / KGS", "GROSS WEIGHT / KGS", "CURRENCY", ""],
+      ["", "", "", "QTY", "TYPE", "PACKAGES", "", "","TYPE", "VALUE"],
+    ];
 
-// Compute totals
-let totalQty = 0;
-let totalValue = 0;
-let totalPackages = 0;
+    let totalQty = 0;
+    let totalValue = 0;
+    let totalNet = 0;
+    let totalGross = 0;
 
-// Build data rows
-(items || []).forEach((it) => {
-  const qty = parseFloat(it.qty || 0);
-  const uw = parseFloat(it.unitWeight || 0);
-  const netWeight = +(qty * uw).toFixed(2);
-  const grossWeight = +(netWeight * 1.04).toFixed(2);
-  const value = parseFloat(it.amount || 0);
+    // 🧮 Step 1: Aggregate per item across all groups
+    const itemWeightMap = {};
 
-  hs_data.push([
-    it.hsCode || "",
-    it.description || "",
-    it.origin || "",
-    qty || "",
-    it.unit || "",
-    it.packages || "",
-    netWeight || "",
-    grossWeight || "",
-    it.currency || "AED",
-    value || "",
-  ]);
+    (groups || []).forEach((g) => {
+      const gNet = parseFloat(g.netWeight || 0);
+      const gBox = parseFloat(g.boxWeight || 0);
 
-  totalQty += qty;
-  totalValue += value;
-  totalPackages += 1;
-});
+      if (!g.items?.length || gNet === 0) return;
 
-// Add totals row
-hs_data.push([]);
-hs_data.push([
-  "TOTAL",
-  "",
-  "",
-  totalQty,
-  "PCS",
-  `${totalPackages} PACKAGE`,
-  "AED",
-  totalValue.toFixed(2),
-]);
+      g.items.forEach((it) => {
+        const qty = parseFloat(it.qty || 0);
+        const uw = parseFloat(it.unitWeight || 0);
+        const itemNet = +(qty * uw).toFixed(2);
 
+        // Skip invalids
+        if (!itemNet) return;
 
-const wsHS = XLSX.utils.aoa_to_sheet(hs_data);
+        // proportionally distribute box weight
+        const share = itemNet / gNet;
+        const itemBoxShare = gBox * share;
+        const itemGross = +(itemNet + itemBoxShare).toFixed(2);
 
-// Set column widths
-wsHS["!cols"] = [
-  { wch: 12 },
-  { wch: 40 },
-  { wch: 20 },
-  { wch: 8 },
-  { wch: 8 },
-  { wch: 12 },
-  { wch: 10 },
-  { wch: 15 },
-];
+        // aggregate partials
+        if (!itemWeightMap[it.id]) {
+          itemWeightMap[it.id] = {
+            hsCode: it.hsCode || "",
+            description: it.description || "",
+            origin: it.origin || "",
+            qty: 0,
+            unit: it.unit || "",
+            net: 0,
+            gross: 0,
+            currency: it.currency || "AED",
+            value: 0,
+          };
+        }
 
-// ✅ Append new HS CODE sheet
-XLSX.utils.book_append_sheet(wb, wsHS, "HS CODE");
+        const record = itemWeightMap[it.id];
+        record.qty += qty;
+        record.net += itemNet;
+        record.gross += itemGross;
+        record.value += parseFloat(it.amount || 0);
+      });
+    });
+
+    // 🧮 Step 2: Convert map to sheet rows
+    Object.values(itemWeightMap).forEach((it) => {
+      hs_data.push([
+        it.hsCode,
+        it.description,
+        it.origin,
+        it.qty,
+        it.unit,
+        "", // packages (optional)
+        it.net.toFixed(2),
+        it.gross.toFixed(2),
+        it.currency,
+        it.value.toFixed(2),
+      ]);
+
+      totalQty += it.qty;
+      totalValue += it.value;
+      totalNet += it.net;
+      totalGross += it.gross;
+    });
+
+    // 🧮 Step 3: Add totals
+    hs_data.push([]);
+    hs_data.push([
+      "TOTAL",
+      "",
+      "",
+      totalQty.toFixed(2),
+      "PCS",
+      `${header.totalPackages || 0} PACKAGE`,
+      totalNet.toFixed(2),
+      totalGross.toFixed(2),
+      "AED",
+      totalValue.toFixed(2),
+    ]);
+
+    const wsHS = XLSX.utils.aoa_to_sheet(hs_data);
+
+    // Set column widths
+    wsHS["!cols"] = [
+      { wch: 12 },
+      { wch: 40 },
+      { wch: 20 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 14 },
+    ];
+
+    // ✅ Append new HS CODE sheet
+    XLSX.utils.book_append_sheet(wb, wsHS, "HS CODE");
 
 
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
