@@ -12,6 +12,18 @@ export default function PackingListPreview({ data, onChange }) {
     return tw > 0 ? tw.toFixed(2) : "—";
   };
 
+    const computedTotalCbm = useMemo(() => {
+      if (!groups || groups.length === 0) return 0;
+      const total = groups.reduce((sum, g) => sum + (parseFloat(g.cbm) || 0), 0);
+      return +total.toFixed(2);
+    }, [groups]);
+
+    useEffect(() => {
+      if (computedTotalCbm !== totalCbm) {
+        onChange({ ...data, totalCbm: computedTotalCbm });
+      }
+    }, [computedTotalCbm]);
+
   // ✅ Unique HS Codes
   const uniqueHsCodes = useMemo(() => {
     const hsSet = new Set();
@@ -278,7 +290,7 @@ export default function PackingListPreview({ data, onChange }) {
         <p>{header.buyerAddress || ""}</p>
         <br />
         <strong>TOTAL CBM (m³):</strong> {" "}
-        {totalCbm?.toFixed(2) || "0.00"}
+        {(totalCbm ?? computedTotalCbm).toFixed(2)}
       </div>
 
       {/* ✅ Totals */}

@@ -196,7 +196,7 @@ try {
         if (!itemWeightMap[it.id]) {
           itemWeightMap[it.id] = {
             hsCode: it.hsCode || "",
-            description: it.description || "",
+            hsLabel: it.hsLabel || "",
             origin: it.origin || "",
             qty: 0,
             unit: it.unit || "",
@@ -219,7 +219,7 @@ try {
     Object.values(itemWeightMap).forEach((it) => {
       hs_data.push([
         it.hsCode,
-        it.description,
+        it.hsLabel,
         it.origin,
         it.qty,
         it.unit,
@@ -237,7 +237,6 @@ try {
     });
 
     // 🧮 Step 3: Add totals
-    hs_data.push([]);
     hs_data.push([
       "TOTAL",
       "",
