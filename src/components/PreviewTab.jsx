@@ -160,6 +160,75 @@ try {
     wsINV["!cols"] = wsPL["!cols"];
     XLSX.utils.book_append_sheet(wb, wsINV, "Invoice");
 
+    // ✅ Build HS CODE Sheet (New)
+const hs_data = [
+  ["H. S. CODE", "DESCRIPTION", "COUNTRY OF ORIGIN", "PACKAGE", "", "", "NET WEIGHT / KGS", "GROSS WEIGHT / KGS", "CURRENCY", ""],
+  ["", "", "", "QTY", "TYPE", "PACKAGES", "TYPE", "VALUE"],
+];
+
+// Compute totals
+let totalQty = 0;
+let totalValue = 0;
+let totalPackages = 0;
+
+// Build data rows
+(items || []).forEach((it) => {
+  const qty = parseFloat(it.qty || 0);
+  const uw = parseFloat(it.unitWeight || 0);
+  const netWeight = +(qty * uw).toFixed(2);
+  const grossWeight = +(netWeight * 1.04).toFixed(2);
+  const value = parseFloat(it.amount || 0);
+
+  hs_data.push([
+    it.hsCode || "",
+    it.description || "",
+    it.origin || "",
+    qty || "",
+    it.unit || "",
+    it.packages || "",
+    netWeight || "",
+    grossWeight || "",
+    it.currency || "AED",
+    value || "",
+  ]);
+
+  totalQty += qty;
+  totalValue += value;
+  totalPackages += 1;
+});
+
+// Add totals row
+hs_data.push([]);
+hs_data.push([
+  "TOTAL",
+  "",
+  "",
+  totalQty,
+  "PCS",
+  `${totalPackages} PACKAGE`,
+  "AED",
+  totalValue.toFixed(2),
+]);
+
+
+const wsHS = XLSX.utils.aoa_to_sheet(hs_data);
+
+// Set column widths
+wsHS["!cols"] = [
+  { wch: 12 },
+  { wch: 40 },
+  { wch: 20 },
+  { wch: 8 },
+  { wch: 8 },
+  { wch: 12 },
+  { wch: 10 },
+  { wch: 15 },
+];
+
+// ✅ Append new HS CODE sheet
+XLSX.utils.book_append_sheet(wb, wsHS, "HS CODE");
+
+
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(new Blob([wbout], { type: "application/octet-stream" }),
       `PL_INV_${header.salesOrderNo || "Export"}.xlsx`
