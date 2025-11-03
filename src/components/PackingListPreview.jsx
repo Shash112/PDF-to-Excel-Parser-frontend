@@ -163,7 +163,7 @@ export default function PackingListPreview({ data, onChange }) {
                     {it.hsCode}
                   </td>
                   <td className="border border-gray-400 px-2 py-1">
-                    {it.origin}
+                    {it.customOrigin?.trim() || it.origin || "—"}
                   </td>
                   <td className="border border-gray-400 px-2 py-1">
                     {it.unitWeight || "—"}
@@ -251,7 +251,7 @@ export default function PackingListPreview({ data, onChange }) {
                           {it.hsCode}
                         </td>
                         <td className="border border-gray-400 px-2 py-1">
-                          {it.origin}
+                          {it.customOrigin?.trim() || it.origin || "—"}
                         </td>
                         <td className="border border-gray-400 px-2 py-1">
                           {it.unitWeight || "—"}

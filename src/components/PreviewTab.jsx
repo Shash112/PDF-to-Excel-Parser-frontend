@@ -98,7 +98,7 @@ const exportBothToExcel = () => {
           it.qty,
           it.unit,
           it.hsCode,
-          it.origin,
+          it.customOrigin?.trim() || it.origin || "—",
           it.unitWeight,
           tw,
         ]);
@@ -123,7 +123,7 @@ const exportBothToExcel = () => {
         it.qty,
         it.unit,
         it.hsCode,
-        it.origin,
+        it.customOrigin?.trim() || it.origin || "—",
         it.unitWeight,
         tw,
       ]);
@@ -216,7 +216,7 @@ const exportBothToExcel = () => {
       it.qty,
       it.unit,
       it.hsCode,
-      it.origin,
+      it.customOrigin?.trim() || it.origin || "—",
       it.rate,
       it.amount,
     ]);
@@ -324,7 +324,7 @@ const exportBothToExcel = () => {
         itemWeightMap[it.id] = {
           hsCode: it.hsCode || "",
           hsLabel: it.hsLabel || "",
-          origin: it.origin || "",
+          origin: it.customOrigin?.trim() || it.origin || "—",
           qty: 0,
           unit: it.unit || "",
           net: 0,

@@ -55,7 +55,7 @@ export default function InvoicePreview({ data }) {
                 <td className="border border-gray-400 px-2 py-1 text-center">{it.unit}</td>
                 <td className="border border-gray-400 px-2 py-1 text-center">{it.hsCode}</td>
                 <td className="border border-gray-400 px-2 py-1 text-center">
-                  {it.origin || "UAE"}
+                  {it.customOrigin?.trim() || it.origin || "—"}
                 </td>
                 <td className="border border-gray-400 px-2 py-1 text-center">{it.rate}</td>
                 <td className="border border-gray-400 px-2 py-1 text-center">{it.amount}</td>

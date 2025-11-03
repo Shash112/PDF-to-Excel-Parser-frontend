@@ -250,7 +250,7 @@ export async function buildPackingListPDF(data) {
         String(it.qty ?? ""),
         it.unit || "",
         it.hsCode || "",
-        it.origin || "",
+        it.customOrigin?.trim() || it.origin || "—",
         uw ? uw.toFixed(2) : "—",
         tw ? tw.toFixed(2) : "—",
       ];
@@ -276,7 +276,7 @@ export async function buildPackingListPDF(data) {
           String(it.qty ?? ""),
           it.unit || "",
           it.hsCode || "",
-          it.origin || "",
+          it.customOrigin?.trim() || it.origin || "—",
           uw ? uw.toFixed(2) : "—",
           tw ? tw.toFixed(2) : "—",
         ];
@@ -350,7 +350,7 @@ export async function buildInvoicePDF(data) {
     String(it.qty ?? ""),
     it.unit || "",
     it.hsCode || "",
-    it.origin || "UAE",
+    it.customOrigin?.trim() || it.origin || "—",
     String(it.rate ?? ""),
     String(it.amount ?? "")
   ]);
