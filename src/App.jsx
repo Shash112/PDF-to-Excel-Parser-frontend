@@ -63,7 +63,7 @@ export default function App() {
             </div>
 
             {/* Middle: Steps */}
-            <nav className="flex gap-3">
+            {/* <nav className="flex gap-3">
               {steps.map((s) => (
                 <button
                   key={s.id}
@@ -79,7 +79,7 @@ export default function App() {
                   {s.label}
                 </button>
               ))}
-            </nav>
+            </nav> */}
 
             {/* Right: Help Button */}
             <button
