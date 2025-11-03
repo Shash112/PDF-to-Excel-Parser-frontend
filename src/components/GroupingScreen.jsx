@@ -337,52 +337,52 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     }, [groupWeights]);
 
 // 🚀 Enhanced sync: handle partial assignment + remove zero-qty items
-useEffect(() => {
-  if (!data.groups || data.groups.length === 0) return;
+  useEffect(() => {
+    if (!data.groups || data.groups.length === 0) return;
 
-  const itemMap = {};
-  (data.items || []).forEach((it) => (itemMap[it.id] = it));
+    const itemMap = {};
+    (data.items || []).forEach((it) => (itemMap[it.id] = it));
 
-  // Track how much qty is left for each item while distributing across groups
-  const remainingQtyMap = {};
-  Object.values(itemMap).forEach((it) => {
-    remainingQtyMap[it.id] = parseFloat(it.qty) || 0;
-  });
-
-  const updatedGroups = data.groups.map((group) => {
-    const newItems = [];
-
-    (group.items || []).forEach((it) => {
-      const latest = itemMap[it.id];
-      if (!latest) return; // item deleted
-
-      const available = remainingQtyMap[it.id] ?? 0;
-      const desiredQty = parseFloat(it.qty) || 0;
-
-      // calculate how much we can still assign
-      const assignQty = Math.min(desiredQty, available);
-
-      // deduct assigned qty from remaining pool
-      remainingQtyMap[it.id] = Math.max(available - assignQty, 0);
-
-      // 🧹 Skip items that end up with zero qty
-      if (assignQty > 0) {
-        newItems.push({
-          ...latest,
-          qty: assignQty,
-        });
-      }
+    // Track how much qty is left for each item while distributing across groups
+    const remainingQtyMap = {};
+    Object.values(itemMap).forEach((it) => {
+      remainingQtyMap[it.id] = parseFloat(it.qty) || 0;
     });
 
-    return { ...group, items: newItems };
-  });
+    const updatedGroups = data.groups.map((group) => {
+      const newItems = [];
 
-  // Only update when there's an actual change
-  const changed = JSON.stringify(updatedGroups) !== JSON.stringify(data.groups);
-  if (changed) onChange({ ...data, groups: updatedGroups });
+      (group.items || []).forEach((it) => {
+        const latest = itemMap[it.id];
+        if (!latest) return; // item deleted
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [data.items]);
+        const available = remainingQtyMap[it.id] ?? 0;
+        const desiredQty = parseFloat(it.qty) || 0;
+
+        // calculate how much we can still assign
+        const assignQty = Math.min(desiredQty, available);
+
+        // deduct assigned qty from remaining pool
+        remainingQtyMap[it.id] = Math.max(available - assignQty, 0);
+
+        // 🧹 Skip items that end up with zero qty
+        if (assignQty > 0) {
+          newItems.push({
+            ...latest,
+            qty: assignQty,
+          });
+        }
+      });
+
+      return { ...group, items: newItems };
+    });
+
+    // Only update when there's an actual change
+    const changed = JSON.stringify(updatedGroups) !== JSON.stringify(data.groups);
+    if (changed) onChange({ ...data, groups: updatedGroups });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.items]);
 
 
 
@@ -529,6 +529,23 @@ useEffect(() => {
     // setSelectedItemId(null);
   };
 
+  useEffect(() => {
+    if (!data.groups || data.groups.length === 0) return;
+
+    const totalCbm = data.groups.reduce(
+      (sum, g) => sum + (parseFloat(g.cbm) || 0),
+      0
+    );
+
+    if (totalCbm !== data.totalCbm) {
+      onChange({
+        ...data,
+        totalCbm: +totalCbm.toFixed(3),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.groups]);
+
   // ==============================
   // 📦 Dimension Handlers
   // ==============================
@@ -541,7 +558,7 @@ useEffect(() => {
       const W = parseFloat(updatedGroup.width) || 0;
       const H = parseFloat(updatedGroup.height) || 0;
 
-      updatedGroup.cbm = parseFloat(((L * W * H) / 1000000).toFixed(2)); // ✅ cubic meters
+      updatedGroup.cbm = parseFloat(((L * W * H) / 1000000).toFixed(3)); // ✅ cubic meters
       return updatedGroup;
     });
 
@@ -553,7 +570,7 @@ useEffect(() => {
     onChange({ 
       ...data, 
       groups, 
-      totalCbm: parseFloat(totalCbm.toFixed(2)) 
+      totalCbm: parseFloat(totalCbm.toFixed(3)) 
     });
   };
 

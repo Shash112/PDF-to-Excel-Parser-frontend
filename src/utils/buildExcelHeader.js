@@ -1,7 +1,7 @@
-export const buildExcelHeader = (header, uniqueHsCodes, title = "") => {
+export const buildExcelHeader = (header, uniqueHsCodes, title = "", origins) => {
   const rows = [];
   rows.push(["eMSG OILFIELD EQUIPMENT TRADING LLC"]);
-  rows.push(["Dubai Industrial City (DIC), Phas 1"]);
+  rows.push(["Dubai Industrial City (DIC), Phase 1"]);
   rows.push(["Sai Shuaib 2, Warehouse No: J-04,"]);
   rows.push([" Dubai, United Arab Emirates"]);
   rows.push(["TRN No: 100518964000003"]);
@@ -11,12 +11,12 @@ export const buildExcelHeader = (header, uniqueHsCodes, title = "") => {
   rows.push(["DATE:", header.orderDate || "", "", "INV. NO:", header.salesOrderNo || ""]);
   rows.push(["S.O. REF:", header.refNo || ""]);
   rows.push([]);
-  rows.push(["CONSIGNEE:", header.buyer || ""]);
-  rows.push(["SOLD TO / INVOICED TO:", header.buyer || ""]);
+  rows.push(["CONSIGNEE:", `${header.buyer} \n ${header.buyerAddress}`]);
+  rows.push(["SOLD TO / INVOICED TO:", `${header.buyer} \n ${header.buyerAddress}`]);
   rows.push(["MODE OF SHIPMENT:", header.modeOfShipment || "", "", "FREIGHT TERMS:", header.freightTerms || ""]);
   rows.push(["PLACE OF LOADING:", header.placeOfLoading || "", "", "PLACE OF DISCHARGE:", header.placeOfDischarge || ""]);
   rows.push([]);
-  rows.push(["COUNTRY OF ORIGIN:", header.countryOfOrigin || "UAE"]);
+  rows.push(["COUNTRY OF ORIGIN:", origins || "UAE"]);
   rows.push([]);
   rows.push(["HS CODE:", uniqueHsCodes.join(", ")]);
   rows.push([]);

@@ -200,7 +200,7 @@ function footerBlocks(doc, y, { packingDetails, shippingMarks,totalCbm =0.00 }) 
  *  Mirrors your PackingListPreview structure
  * ============================ */
 export async function buildPackingListPDF(data) {
-  const { header = {}, groups = [], items = [], totalCbm } = data;
+  const { header = {}, groups = [], items = [], totalCbm=0.00 } = data;
   // unique HS codes (same logic)
   const hsSet = new Set();
   items.forEach(it => it.hsCode && hsSet.add(it.hsCode));
@@ -330,7 +330,7 @@ export async function buildPackingListPDF(data) {
  *  Mirrors your InvoicePreview structure
  * ============================ */
 export async function buildInvoicePDF(data) {
-  const { header = {}, items = [], totals = {}, totalCbm } = data;
+  const { header = {}, items = [], totals = {}, totalCbm=0.00 } = data;
 
   // unique HS codes (same logic)
   const hsSet = new Set();

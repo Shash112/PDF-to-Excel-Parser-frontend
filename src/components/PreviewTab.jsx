@@ -54,8 +54,10 @@ try {
   // Excel export unchanged
   const exportBothToExcel = () => {
     const wb = XLSX.utils.book_new();
+    const origins = Array.isArray(header.uniqueOrigin) ? (header.uniqueOrigin).join(", ") : header.uniqueOrigin ? header.uniqueOrigin : "" 
+
     const pl_data = [
-      ...buildExcelHeader(header, uniqueHsCodes, "PACKING LIST"),
+      ...buildExcelHeader(header, uniqueHsCodes, "PACKING LIST", origins),
       ["SR NO", "DESCRIPTION", "QTY", "UOM", "H.S. CODE", "ORIGIN", "UNIT WEIGHT / KGS", "TOTAL WEIGHT / KGS"],
     ];
 
@@ -119,7 +121,7 @@ try {
     pl_data.push(["", "", "", "", "", "", "TOTAL GROSS WEIGHT:", globalGross]);
     pl_data.push([]);
     pl_data.push(["PACKING DETAILS", header.packingDetails || ""]);
-    pl_data.push(["SHIPPING MARKS", header.buyer || ""]);
+    pl_data.push(["SHIPPING MARKS", `${header.buyer} \n ${header.buyerAddress}`]);
 
     const wsPL = XLSX.utils.aoa_to_sheet(pl_data);
     wsPL["!cols"] = [
@@ -128,7 +130,7 @@ try {
     XLSX.utils.book_append_sheet(wb, wsPL, "Packing_List");
 
     const inv_data = [
-      ...buildExcelHeader(header, uniqueHsCodes, "COMMERCIAL INVOICE"),
+      ...buildExcelHeader(header, uniqueHsCodes, "COMMERCIAL INVOICE", origins),
       ["SR NO", "DESCRIPTION", "QTY", "UOM", "H.S. CODE", "ORIGIN", "UNIT PRICE / AED", "TOTAL VALUE / AED"],
     ];
 
@@ -154,7 +156,7 @@ try {
     inv_data.push([`IN WORDS : ${totals?.totalInWords || totals?.amountInWords || ""}`]);
     inv_data.push([]);
     inv_data.push(["PACKING DETAILS:", header.packingDetails || ""]);
-    inv_data.push(["SHIPPING MARKS:", header.buyer || ""]);
+    inv_data.push(["SHIPPING MARKS:", `${header.buyer} \n ${header.buyerAddress}`]);
 
     const wsINV = XLSX.utils.aoa_to_sheet(inv_data);
     wsINV["!cols"] = wsPL["!cols"];
