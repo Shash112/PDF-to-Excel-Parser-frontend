@@ -960,7 +960,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
                           {it.hsCode || ""}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
-                          {it.origin || ""}
+                          {it.customOrigin?.trim() || it.origin || "—"}
                         </td>
                         <td className="border-t px-2 py-2 text-center">
                           {it.unitWeight || ""}
