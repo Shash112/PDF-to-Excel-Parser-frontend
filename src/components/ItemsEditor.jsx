@@ -458,22 +458,27 @@ export default function ItemsEditor({ data, onChange, onNext }) {
             <tr>
               <td className="border border-gray-400 p-3 align-top w-1/2">
                                 {/* Loading & Discharge */}
-                <div className="mt-2">
+                <div className="mt-2 flex items-center gap-2">
                   <strong>PLACE OF LOADING :</strong>{" "}
+                  <div>
+
                   <input
                     type="text"
                     value={data.header.placeOfLoading || ""}
                     onChange={(e) => setHeader("placeOfLoading", e.target.value)}
                     className={`border border-gray-300 rounded p-1 ml-1 w-64 ${validationErrors.header.placeOfLoading ? "border-red-500" : "border-gray-300"}`}
-                  />
+                    />
                   {validationErrors.header.placeOfLoading && (
                     <p className="text-red-500 text-xs mt-1">Required field</p>
                   )}
                 </div>
+                </div>
               </td>
               <td className="border border-gray-400 p-3 align-top w-1/2">
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-2">
                   <strong>PLACE OF DISCHARGE :</strong>{" "}
+                  <div>
+
                   <input
                     type="text"
                     value={data.header.placeOfDischarge || ""}
@@ -481,10 +486,11 @@ export default function ItemsEditor({ data, onChange, onNext }) {
                       setHeader("placeOfDischarge", e.target.value)
                     }
                     className={`border border-gray-300 rounded p-1 ml-1 w-64 ${validationErrors.header.placeOfDischarge ? "border-red-500" : "border-gray-300"}`}
-                  />
-                  {validationErrors.header.placeOfDischarge && (
-                    <p className="text-red-500 text-xs mt-1">Required field</p>
-                  )}
+                    />
+                    {validationErrors.header.placeOfDischarge && (
+                      <p className="text-red-500 text-xs mt-1">Required field</p>
+                    )}
+                  </div>
                 </div>
               </td>
             </tr>
