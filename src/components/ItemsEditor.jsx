@@ -50,7 +50,7 @@ export default function ItemsEditor({ data, onChange, onNext }) {
     // 🔹 Validate Each Item
     data.items.forEach((item, i) => {
       const itemErrors = {};
-      ["itemCode", "description", "qty", "unit", "hsCode", "origin", "unitWeight"].forEach(
+      ["description", "qty", "unit", "hsCode", "origin", "unitWeight"].forEach(
         (field) => {
           if (
             item[field] === undefined ||

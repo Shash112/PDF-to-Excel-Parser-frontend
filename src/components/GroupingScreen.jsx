@@ -322,7 +322,7 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
         return {
           ...g,
           netWeight: gw.net,
-          grossWeight: finalGross,
+          grossWeight: g.isGrossAdjusted ? g.grossWeight : finalGross,
         };
       });
 
@@ -335,6 +335,10 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       if (changed) onChange({ ...data, groups: updatedGroups });
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [groupWeights]);
+
+
+
+
 
 // 🚀 Enhanced sync: handle partial assignment + remove zero-qty items
   useEffect(() => {
@@ -388,25 +392,50 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
 
 
   // ✅ Update editable gross weight (cannot be less than net)
-    const handleGrossWeightChange = (gid, value) => {
-      const newGroups = (data.groups || []).map((g) => {
-        if (g.id !== gid) return g;
+const handleGrossWeightChange = (gid, newGross) => {
+  const group = groups.find(g => g.id === gid);
+  if (!group) return;
 
-        const netWeight = parseFloat(g.netWeight || 0);
-        const boxWeight = parseFloat(g.boxWeight || 0);
-        const minGross = netWeight + boxWeight;
-        const newGross = parseFloat(value);
+  const parsedGross = parseFloat(newGross);
+  if (!Number.isFinite(parsedGross) || parsedGross <= 0) {
+    alert("Enter a valid gross weight (>0)");
+    return;
+  }
 
-        if (!Number.isFinite(newGross) || newGross < minGross) {
-          alert(`Gross weight cannot be less than Net (${netWeight}) + Box (${boxWeight}) = ${minGross.toFixed(2)} KGS.`);
-          return g;
-        }
+  const net = group.netWeight;
+  const box = group.boxWeight;
+  const diff = parsedGross - (net + box);
+  if (Math.abs(diff) < 0.001) return;
 
-        return { ...g, grossWeight: +newGross.toFixed(2) };
-      });
+  const totalNet = net;
+  const newItems = group.items.map(it => {
+    const itemTotal = it.qty * it.unitWeight;
+    const share = itemTotal / totalNet;
+    const newTotal = itemTotal + diff * share;
+    if (newTotal <= 0) throw new Error("Invalid adjustment — negative weight.");
+    const newUnit = +(newTotal / it.qty).toFixed(4);
+    return { ...it, unitWeight: newUnit };
+  });
 
-      onChange({ ...data, groups: newGroups });
-    };
+  const newNet = newItems.reduce((sum, i) => sum + i.qty * i.unitWeight, 0);
+
+  const updatedGroups = groups.map(g =>
+    g.id === gid
+      ? { ...g, items: newItems, netWeight: +newNet.toFixed(2), grossWeight: +parsedGross.toFixed(2), isGrossAdjusted: true }
+      : g
+  );
+
+  // ✅ Sync adjusted unit weights to master item list
+  const updatedItems = data.items.map(item => {
+    const adjusted = newItems.find(i => i.id === item.id);
+    return adjusted ? { ...item, unitWeight: adjusted.unitWeight } : item;
+  });
+
+  onChange({ ...data, items: updatedItems, groups: updatedGroups });
+};
+
+
+
 
 
    // ✅ Auto focus for "Add Group" modal
@@ -1221,6 +1250,17 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
 
             if (!selectedGroupItems.length) return alert("No items selected.");
 
+            // Calculate net and gross weights immediately
+            let net = 0;
+            selectedGroupItems.forEach(it => {
+              const qty = parseFloat(it.qty) || 0;
+              const unit = parseFloat(it.unitWeight) || 0;
+              net += qty * unit;
+            });
+            net = +net.toFixed(2);
+            const boxWeight = 0; // start with 0, can edit later
+            const gross = +(net + boxWeight).toFixed(2);
+
             const newGroup = {
               id: Date.now(),
               name,
@@ -1230,10 +1270,12 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
               width,
               height,
               cbm,
-              boxWeight: 0,
-              netWeight: 0,
-              grossWeight: 0,
+              boxWeight,
+              netWeight: net,
+              grossWeight: gross,
+              isGrossAdjusted: false,
             };
+
 
             const updatedGroups = [...(data.groups || []), newGroup];
             onChange({ ...data, groups: updatedGroups });
