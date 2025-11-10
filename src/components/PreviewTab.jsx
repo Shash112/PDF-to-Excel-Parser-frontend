@@ -306,6 +306,7 @@ const exportBothToExcel = () => {
   const itemWeightMap = {};
 
   (groups || []).forEach((g) => {
+    console.log("HS Code all data: ", g);
     const gNet = parseFloat(g.netWeight || 0);
     const gBox = parseFloat(g.boxWeight || 0);
     if (!g.items?.length || gNet === 0) return;
@@ -339,6 +340,8 @@ const exportBothToExcel = () => {
       record.net += itemNet;
       record.gross += itemGross;
       record.value += parseFloat(it.amount || 0);
+      console.log("itemweightMap: ", itemWeightMap);
+      console.log("recorded: ", recorded);
     });
   });
 
