@@ -341,7 +341,7 @@ const exportBothToExcel = () => {
       record.gross += itemGross;
       record.value += parseFloat(it.amount || 0);
       console.log("itemweightMap: ", itemWeightMap);
-      console.log("recorded: ", recorded);
+      console.log("recorded: ", record);
     });
   });
 
