@@ -334,7 +334,11 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       const qty = parseFloat(it.qty || 0);
       const uw = parseFloat(it.unitWeight || 0);
       const itemNet = +(qty * uw).toFixed(2);
-      const itemGross = +(itemNet * 1.04).toFixed(2); // approximate 4% box weight (adjust if needed)
+      
+      const extra = (it.extraWeights || []).reduce((sum, e) => sum + e.diff, 0);
+
+      const itemGross = +(itemNet + extra).toFixed(2);
+
       const value = parseFloat(it.amount || 0);
 
       hs_data.push([
@@ -438,6 +442,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     <div className="bg-white border rounded-lg shadow p-6 w-full relative">
       <div className="flex justify-between mb-6 items-center">
         <div className="flex gap-2">
+          {console.log("Preview Tab: ", data)}
           {["PL", "INV"].map((tab) => (
             <button
               key={tab}
