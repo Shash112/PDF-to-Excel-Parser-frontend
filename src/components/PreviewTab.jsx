@@ -369,7 +369,9 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       "PCS",
       `${header.totalPackages || 0} PACKAGE`,
       totalNet.toFixed(2),
-      totalGross.toFixed(2),
+      (Number(totalGross.toFixed(2)) +
+        groups.reduce((sum, g) => sum + (parseFloat(g.boxWeight) || 0), 0)
+      ).toFixed(2),
       "AED",
       totalValue.toFixed(2),
     ]);

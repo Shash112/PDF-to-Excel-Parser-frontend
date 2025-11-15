@@ -316,63 +316,57 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
   // ✅ Persist updated net & gross weights whenever boxWeight or items change
   useEffect(() => {
     if (!Array.isArray(groupWeights) || !groupWeights.length) return;
-
+  
     const updatedGroups = (groups || []).map((g) => {
+      // 🚫 If actual weight was entered, DO NOT override anything
+      if (g.isGrossAdjusted) return g;
+  
       const gw = groupWeights.find((x) => x.id === g.id);
       if (!gw) return g;
-
-      // Gross = Net + BoxWeight (always)
+  
       const finalGross = +(gw.net + gw.boxWeight).toFixed(2);
-
+  
       if (g.netWeight === gw.net && g.grossWeight === finalGross) return g;
-
+  
       return {
         ...g,
         netWeight: gw.net,
-        grossWeight: g.isGrossAdjusted ? g.grossWeight : finalGross,
+        grossWeight: finalGross, // only change if not manually adjusted
       };
     });
-
+  
     const changed = updatedGroups.some(
       (g, i) =>
         g.netWeight !== groups[i]?.netWeight ||
         g.grossWeight !== groups[i]?.grossWeight
     );
-
+  
     if (changed) onChange({ ...data, groups: updatedGroups });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupWeights]);
+  
 
   // 🚀 Enhanced sync: handle partial assignment + remove zero-qty items
   useEffect(() => {
     if (!data.groups || data.groups.length === 0) return;
-
+  
     const itemMap = {};
     (data.items || []).forEach((it) => (itemMap[it.id] = it));
-
-    // Track how much qty is left for each item while distributing across groups
-    const remainingQtyMap = {};
-    Object.values(itemMap).forEach((it) => {
-      remainingQtyMap[it.id] = parseFloat(it.qty) || 0;
-    });
-
+  
     const updatedGroups = data.groups.map((group) => {
+  
+      // 🚫 STOP overwriting adjusted group items
+      if (group.isGrossAdjusted) return group;
+  
       const newItems = [];
-
+  
       (group.items || []).forEach((it) => {
         const latest = itemMap[it.id];
-        if (!latest) return; // item deleted
-
+        if (!latest) return;
+  
         const available = remainingQtyMap[it.id] ?? 0;
         const desiredQty = parseFloat(it.qty) || 0;
-
-        // calculate how much we can still assign
         const assignQty = Math.min(desiredQty, available);
-
-        // deduct assigned qty from remaining pool
-        remainingQtyMap[it.id] = Math.max(available - assignQty, 0);
-
-        // 🧹 Skip items that end up with zero qty
+  
         if (assignQty > 0) {
           newItems.push({
             ...latest,
@@ -380,17 +374,16 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
           });
         }
       });
-
+  
       return { ...group, items: newItems };
     });
-
-    // Only update when there's an actual change
+  
     const changed =
       JSON.stringify(updatedGroups) !== JSON.stringify(data.groups);
     if (changed) onChange({ ...data, groups: updatedGroups });
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  
   }, [data.items]);
+  
 
   // ✅ Auto focus for "Add Group" modal
 
@@ -569,91 +562,103 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     if (cbmInput) cbmInput.value = cbm;
   };
 
-  // ✅ Handle Actual Weighing Adjustment
-  const handleActualWeightInput = (gid) => {
-    const group = groups.find((g) => g.id === gid);
-    if (!group) return;
+// ✅ Handle Actual Weighing Adjustment
+const handleActualWeightInput = (gid) => {
+  const group = groups.find((g) => g.id === gid);
+  if (!group) return;
 
-    const theoreticalGross = +(group.netWeight + group.boxWeight).toFixed(3);
+  const theoreticalGross = +(group.netWeight + group.boxWeight).toFixed(3);
 
-    const input = prompt(
-      `Enter actual weighed gross weight for "${group.name}" (Theoretical: ${theoreticalGross} KGS):`
-    );
+  const input = prompt(
+    `Enter actual weighed gross weight for "${group.name}" (Theoretical: ${theoreticalGross} KGS):`
+  );
 
-    if (input === null) return; // user cancelled
-    const actualGross = parseFloat(input);
-    if (!Number.isFinite(actualGross) || actualGross <= 0) {
-      alert("❌ Please enter a valid positive number.");
-      return;
-    }
+  if (input === null) return;
+  const actualGross = parseFloat(input);
+  if (!Number.isFinite(actualGross) || actualGross <= 0) {
+    alert("❌ Please enter a valid positive number.");
+    return;
+  }
 
-    const diff = +(actualGross - theoreticalGross).toFixed(3);
+  const diff = +(actualGross - theoreticalGross).toFixed(4);
+  console.log("Diff: ", diff);
 
-    if (Math.abs(diff) < 0.001) {
-      alert(
-        "✅ Actual weight matches theoretical weight. No adjustment needed."
-      );
-      return;
-    }
+  if (Math.abs(diff) < 0.001) {
+    alert("Actual matches theoretical. No adjustment needed.");
+    return;
+  }
 
-    // 🧮 Proportionally distribute difference across group items
-    const totalNet = group.netWeight;
-    const adjustedItems = group.items.map((it) => {
-      const itemTotal = it.qty * it.unitWeight;
-      const share = totalNet > 0 ? itemTotal / totalNet : 0;
-      const adjustedTotal = itemTotal + diff * share;
-      const newUnit = +(adjustedTotal / it.qty).toFixed(4);
+  // ⭐ Use clone group's own unitWeight — NOT global item
+  const totalNet = group.netWeight;
+  console.log("Total Net: ", totalNet);
 
-      return {
-        ...it,
-        unitWeight: newUnit,
-      };
-    });
+  const adjustedItems = group.items.map((it) => {
+    const itemTotal = it.qty * it.unitWeight;
+    console.log("Item Total: ", itemTotal);
+    const share = totalNet > 0 ? itemTotal / totalNet : 0;
+    console.log("Share: ", share);
 
-    // ✅ Update group weights
-    const newNet = adjustedItems.reduce(
-      (sum, i) => sum + i.qty * i.unitWeight,
-      0
-    );
-    const updatedGroup = {
-      ...group,
-      items: adjustedItems,
-      netWeight: +newNet.toFixed(3),
-      grossWeight: +actualGross.toFixed(3),
-      isGrossAdjusted: true,
+    const adjustedTotal = itemTotal + diff * share;
+    console.log("Adjusted Total: ", adjustedTotal);
+    const newUnit = +(adjustedTotal / it.qty).toFixed(6);
+    console.log("Old Unit: ", it.unitWeight);
+    console.log("New Unit: ", newUnit);
+
+    return {
+      ...it,
+      unitWeight: newUnit,
     };
+  });
 
-    // ✅ Merge into groups list
-    const updatedGroups = groups.map((g) => (g.id === gid ? updatedGroup : g));
+  // ⭐ Recompute net using adjusted group items
+  const newNet = adjustedItems.reduce(
+    (sum, i) => sum + i.qty * i.unitWeight,
+    0
+  );
 
-    // ✅ Store item-level extraWeights globally
-    const updatedItems = data.items.map((item) => {
-      const matched = adjustedItems.find((i) => i.id === item.id);
-      if (!matched) return item;
-
-      const itemTotalBefore = item.qty * item.unitWeight;
-      const itemTotalAfter = matched.qty * matched.unitWeight;
-      const itemDiff = +(itemTotalAfter - itemTotalBefore).toFixed(4);
-
-      return {
-        ...item,
-        extraWeights: [
-          ...(item.extraWeights || []),
-          { groupId: gid, diff: itemDiff },
-        ],
-        unitWeight: matched.unitWeight, // sync new unit weight
-      };
-    });
-
-    // ✅ Commit all changes
-    onChange({ ...data, items: updatedItems, groups: updatedGroups });
-
-    alert(
-      `✅ Actual weight (${actualGross} KGS) adjusted.\nDifference: ${
-        diff > 0 ? "+" : ""
-      }${diff} KGS distributed across ${adjustedItems.length} items.`
-    );
+  const updatedGroup = {
+    ...group,
+    items: adjustedItems,
+    netWeight: +newNet.toFixed(3),
+    grossWeight: +actualGross.toFixed(3),
+    isGrossAdjusted: true,     // protect manual gross
+    _manualGross: actualGross, // extra safety
   };
+
+  // ⭐ Update group list
+  const updatedGroups = groups.map((g) =>
+    g.id === gid ? updatedGroup : g
+  );
+
+  // ⭐ Update global items WITHOUT using item.unitWeight
+  const updatedItems = data.items.map((item) => {
+    // Find matching clone inside group
+    const matched = adjustedItems.find((gi) => gi.id === item.id);
+    if (!matched) return item;
+
+    // RECOMPUTE item diff using group's own BEFORE values
+    const clonesBefore = group.items.find((gi) => gi.id === item.id);
+    const beforeTotal = clonesBefore.qty * clonesBefore.unitWeight;
+    const afterTotal = matched.qty * matched.unitWeight;
+
+    const diffForItem = +(afterTotal - beforeTotal).toFixed(6);
+
+    return {
+      ...item,
+      extraWeights: [
+        ...(item.extraWeights || []),
+        { groupId: gid, diff: diffForItem },
+      ],
+    };
+  });
+
+  onChange({ ...data, items: updatedItems, groups: updatedGroups });
+
+  alert(
+    `Adjusted. Total difference distributed: ${diff > 0 ? "+" : ""}${diff} KGS.`
+  );
+};
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-12">

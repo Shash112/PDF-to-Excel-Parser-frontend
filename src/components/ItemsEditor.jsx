@@ -247,8 +247,8 @@ export default function ItemsEditor({ data, onChange, onNext }) {
       items.forEach((row) => {
         const originValue =
           row.origin === "Other"
-            ? row.customOrigin?.trim()
-            : row.origin?.trim();
+            ? row.customOrigin?.toLowerCase()?.trim()
+            : row.origin?.toLowerCase()?.trim();
         if (originValue) uniqueOriginSet.add(originValue);
       });
       updatedData.header = {
