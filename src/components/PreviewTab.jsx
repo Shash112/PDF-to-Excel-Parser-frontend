@@ -348,7 +348,8 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
         qty,
         it.unit || "",
         "",
-        itemNet.toFixed(2),
+        // itemNet.toFixed(2),
+        itemGross.toFixed(2),  // use itemGross instead of itemNet
         itemGross.toFixed(2),
         it.currency || "AED",
         value.toFixed(2),
@@ -368,7 +369,8 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       totalQty.toFixed(2),
       "PCS",
       `${header.totalPackages || 0} PACKAGE`,
-      totalNet.toFixed(2),
+      // totalNet.toFixed(2),
+      totalGross.toFixed(2), // use totalGross instead of totalNet
       (Number(totalGross.toFixed(2)) +
         groups.reduce((sum, g) => sum + (parseFloat(g.boxWeight) || 0), 0)
       ).toFixed(2),

@@ -362,8 +362,9 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       (group.items || []).forEach((it) => {
         const latest = itemMap[it.id];
         if (!latest) return;
-  
-        const available = remainingQtyMap[it.id] ?? 0;
+
+        // ✅ Remaining quantity for this item, excluding the current group
+        const available = getRemainingForItem(it.id, group.id);
         const desiredQty = parseFloat(it.qty) || 0;
         const assignQty = Math.min(desiredQty, available);
   
