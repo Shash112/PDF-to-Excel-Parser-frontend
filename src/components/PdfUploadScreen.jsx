@@ -42,10 +42,9 @@ export default function PdfUploadScreen({ onParsed }) {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      console.log("✅ Parsed Data (PDF):", response.data);
       onParsed(response.data);
     } catch (err) {
-      console.error("❌ Error parsing PDF:", err);
+      console.error("❌ Error parsing PDF");
       setError(err.response?.data?.error || "Failed to parse PDF");
     } finally {
       setLoading(false);
@@ -91,7 +90,7 @@ export default function PdfUploadScreen({ onParsed }) {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("❌ Error processing XLSX:", err);
+      console.error("❌ Error processing XLSX");
       setXlsxError(err.response?.data?.error || "Failed to process XLSX");
     } finally {
       setLoadingXlsx(false);

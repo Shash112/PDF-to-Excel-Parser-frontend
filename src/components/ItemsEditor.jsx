@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 
 export default function ItemsEditor({ data, onChange, onNext }) {
-
-  console.log("Items editor: ", data)
   const [splitModal, setSplitModal] = useState(null);
   const [splitParts, setSplitParts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({
@@ -52,13 +50,30 @@ export default function ItemsEditor({ data, onChange, onNext }) {
       const itemErrors = {};
       ["description", "qty", "unit", "hsCode", "origin", "unitWeight"].forEach(
         (field) => {
-          if (
-            item[field] === undefined ||
-            item[field] === "" ||
-            (typeof item[field] === "number" && item[field] <= 0)
-          ) {
-            itemErrors[field] = true;
-            hasError = true;
+          const value = item[field];
+          
+          // Special handling for unitWeight: must be > 0 (not empty, not 0, not "0", not "0.00")
+          if (field === "unitWeight") {
+            const numValue = parseFloat(value);
+            if (
+              value === undefined ||
+              value === "" ||
+              isNaN(numValue) ||
+              numValue <= 0
+            ) {
+              itemErrors[field] = true;
+              hasError = true;
+            }
+          } else {
+            // Standard validation for other fields
+            if (
+              value === undefined ||
+              value === "" ||
+              (typeof value === "number" && value <= 0)
+            ) {
+              itemErrors[field] = true;
+              hasError = true;
+            }
           }
         }
       );
@@ -666,6 +681,7 @@ export default function ItemsEditor({ data, onChange, onNext }) {
                         <input
                           type="number"
                           min="0"
+                          step="0.01"
                           value={it.unitWeight || ""}
                           onChange={(e) => handleItemChange(i, "unitWeight", e.target.value)}
                             onBlur={(e) => {
@@ -675,6 +691,9 @@ export default function ItemsEditor({ data, onChange, onNext }) {
                             placeholder="0.00"
                           className={`w-full text-center p-1.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-400 ${validationErrors.items[i]?.unitWeight ? "border-red-500" : "border-gray-300"}`}
                         />
+                        {validationErrors.items[i]?.unitWeight && (
+                          <p className="text-red-500 text-xs mt-1">Required field (must be greater than 0)</p>
+                        )}
                       </td>
                     </tr>
                   ))

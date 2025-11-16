@@ -39,7 +39,7 @@ const generatePDF = async (data) => {
         reader.readAsDataURL(blob);
       });
     } catch (err) {
-      console.error("❌ Logo fetch failed:", err);
+      console.error("❌ Logo fetch failed");
       return null;
     }
   }
@@ -60,7 +60,7 @@ const generatePDF = async (data) => {
       try {
         doc.addImage(logoBase64, "PNG", L, cursorY, 30, 15);
       } catch (e) {
-        console.warn("⚠️ addImage failed:", e);
+        console.warn("⚠️ addImage failed");
       }
     }
 
@@ -231,8 +231,6 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
     return remaining > 0 ? +remaining.toFixed(6) : 0;
   };
 
-  console.log(header);
-  console.log(totals);
   // ✅ Calculate already assigned qty for each item
   const assignedQtyMap = useMemo(() => {
     const map = {};
@@ -541,7 +539,6 @@ export default function GroupingScreen({ data, onChange, onPrev, onNext }) {
       (sum, g) => sum + (parseFloat(g.cbm) || 0),
       0
     );
-    console.log(totalCbm);
 
     // ✅ Update parent data with groups and totalCbm
     onChange({
@@ -582,7 +579,6 @@ const handleActualWeightInput = (gid) => {
   }
 
   const diff = +(actualGross - theoreticalGross).toFixed(4);
-  console.log("Diff: ", diff);
 
   if (Math.abs(diff) < 0.001) {
     alert("Actual matches theoretical. No adjustment needed.");
@@ -591,19 +587,13 @@ const handleActualWeightInput = (gid) => {
 
   // ⭐ Use clone group's own unitWeight — NOT global item
   const totalNet = group.netWeight;
-  console.log("Total Net: ", totalNet);
 
   const adjustedItems = group.items.map((it) => {
     const itemTotal = it.qty * it.unitWeight;
-    console.log("Item Total: ", itemTotal);
     const share = totalNet > 0 ? itemTotal / totalNet : 0;
-    console.log("Share: ", share);
 
     const adjustedTotal = itemTotal + diff * share;
-    console.log("Adjusted Total: ", adjustedTotal);
     const newUnit = +(adjustedTotal / it.qty).toFixed(6);
-    console.log("Old Unit: ", it.unitWeight);
-    console.log("New Unit: ", newUnit);
 
     return {
       ...it,
@@ -637,19 +627,30 @@ const handleActualWeightInput = (gid) => {
     const matched = adjustedItems.find((gi) => gi.id === item.id);
     if (!matched) return item;
 
-    // RECOMPUTE item diff using group's own BEFORE values
+    // ✅ Use ORIGINAL item's unitWeight as baseline (not group's item which might have been adjusted)
+    const originalUnitWeight = parseFloat(item.unitWeight || 0);
     const clonesBefore = group.items.find((gi) => gi.id === item.id);
-    const beforeTotal = clonesBefore.qty * clonesBefore.unitWeight;
+    
+    // Calculate before total using ORIGINAL unitWeight (baseline before any adjustments)
+    const beforeTotal = clonesBefore.qty * originalUnitWeight;
+    // Calculate after total using adjusted unitWeight from this group's adjustment
     const afterTotal = matched.qty * matched.unitWeight;
 
     const diffForItem = +(afterTotal - beforeTotal).toFixed(6);
 
+    // ✅ Update existing entry for this groupId if it exists, otherwise append
+    const existingExtraWeights = item.extraWeights || [];
+    const existingIndex = existingExtraWeights.findIndex(e => e.groupId === gid);
+    
+    const updatedExtraWeights = existingIndex >= 0
+      ? existingExtraWeights.map((e, idx) => 
+          idx === existingIndex ? { groupId: gid, diff: diffForItem } : e
+        )
+      : [...existingExtraWeights, { groupId: gid, diff: diffForItem }];
+
     return {
       ...item,
-      extraWeights: [
-        ...(item.extraWeights || []),
-        { groupId: gid, diff: diffForItem },
-      ],
+      extraWeights: updatedExtraWeights,
     };
   });
 
@@ -1107,12 +1108,12 @@ const handleActualWeightInput = (gid) => {
 
       {/* ✅ Totals (added) */}
       <div className="w-full max-w-7xl mt-6 text-right text-gray-700">
-        <p className="font-semibold">
+        {/* <p className="font-semibold">
           Total Net Weight: {totalNet.toFixed(2)} KGS
         </p>
         <p className="font-semibold">
           Total Gross Weight: {totalGross.toFixed(2)} KGS
-        </p>
+        </p> */}
         <button
           onClick={() => generatePDF(data)}
           className="mt-4 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md cursor-pointer"

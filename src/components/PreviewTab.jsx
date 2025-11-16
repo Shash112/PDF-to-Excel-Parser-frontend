@@ -34,7 +34,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       doc.save(fileName);
       setShowDropdown(false);
     } catch (err) {
-      console.error("❌ PDF generation failed (PL):", err);
+      console.error("❌ PDF generation failed (PL)");
     }
   };
 
@@ -45,7 +45,7 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
       doc.save(fileName);
       setShowDropdown(false);
     } catch (err) {
-      console.error("❌ PDF generation failed (INV):", err);
+      console.error("❌ PDF generation failed (INV)");
     }
   };
 
@@ -446,7 +446,6 @@ export default function PreviewTabs({ data, onChange, onPrev }) {
     <div className="bg-white border rounded-lg shadow p-6 w-full relative">
       <div className="flex justify-between mb-6 items-center">
         <div className="flex gap-2">
-          {console.log("Preview Tab: ", data)}
           {["PL", "INV"].map((tab) => (
             <button
               key={tab}

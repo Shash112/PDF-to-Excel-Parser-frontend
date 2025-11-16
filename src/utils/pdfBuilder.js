@@ -22,7 +22,7 @@ async function getBase64Logo() {
       reader.readAsDataURL(blob);
     });
   } catch (err) {
-    console.error("❌ Logo fetch failed:", err);
+    console.error("❌ Logo fetch failed");
     return null;
   }
 }
@@ -58,7 +58,7 @@ async function headerBlock(doc, { header, title, uniqueHsCodes }) {
         try {
             doc.addImage(logoBase64, "PNG", L, T, 30, 15);
         } catch (e) {
-            console.warn("⚠️ addImage failed:", e);
+            console.warn("⚠️ addImage failed");
         }
     }
 
